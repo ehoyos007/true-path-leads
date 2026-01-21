@@ -16,39 +16,48 @@ export type Database = {
     Tables: {
       leads: {
         Row: {
+          behind_on_payments: string | null
           created_at: string
           debt_amount: number
           debt_types: string[]
           email: string
+          employment_status: string | null
           id: string
           name: string
           notes: string | null
           phone: string
           status: Database["public"]["Enums"]["lead_status"]
+          timeline_goal: string | null
           updated_at: string
         }
         Insert: {
+          behind_on_payments?: string | null
           created_at?: string
           debt_amount: number
           debt_types?: string[]
           email: string
+          employment_status?: string | null
           id?: string
           name: string
           notes?: string | null
           phone: string
           status?: Database["public"]["Enums"]["lead_status"]
+          timeline_goal?: string | null
           updated_at?: string
         }
         Update: {
+          behind_on_payments?: string | null
           created_at?: string
           debt_amount?: number
           debt_types?: string[]
           email?: string
+          employment_status?: string | null
           id?: string
           name?: string
           notes?: string | null
           phone?: string
           status?: Database["public"]["Enums"]["lead_status"]
+          timeline_goal?: string | null
           updated_at?: string
         }
         Relationships: []
