@@ -23,9 +23,9 @@ const Footer = () => {
                 <Phone className="h-4 w-4" />
                 1-800-555-0123
               </a>
-              <a href="mailto:info@truehorizonfinancial.com" className="flex items-center gap-2 text-background/70 hover:text-accent transition-colors">
+              <a href="mailto:notifications@thfinancial.org" className="flex items-center gap-2 text-background/70 hover:text-accent transition-colors">
                 <Mail className="h-4 w-4" />
-                info@truehorizonfinancial.com
+                notifications@thfinancial.org
               </a>
               <div className="flex items-center gap-2 text-background/70">
                 <MapPin className="h-4 w-4" />
