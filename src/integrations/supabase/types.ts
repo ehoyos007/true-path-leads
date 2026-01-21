@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           behind_on_payments: string | null
           created_at: string
+          crm_id: number | null
           debt_amount: number
           debt_types: string[]
           email: string
@@ -33,6 +34,7 @@ export type Database = {
         Insert: {
           behind_on_payments?: string | null
           created_at?: string
+          crm_id?: number | null
           debt_amount: number
           debt_types?: string[]
           email: string
@@ -48,6 +50,7 @@ export type Database = {
         Update: {
           behind_on_payments?: string | null
           created_at?: string
+          crm_id?: number | null
           debt_amount?: number
           debt_types?: string[]
           email?: string
