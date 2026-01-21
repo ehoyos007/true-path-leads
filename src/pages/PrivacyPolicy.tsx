@@ -202,7 +202,7 @@ const PrivacyPolicy = () => {
                 <div className="bg-muted/50 p-4 rounded-lg">
                   <p className="font-medium">True Horizon Financial</p>
                   <p>Email: notifications@thfinancial.org</p>
-                  <p>Los Angeles, CA</p>
+                  <p>Miami, FL</p>
                 </div>
               </section>
 
