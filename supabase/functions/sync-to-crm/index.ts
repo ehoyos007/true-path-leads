@@ -28,10 +28,47 @@ const SAFE_ERRORS = {
   invalid_lead: "Unable to process your request.",
   crm_error: "We are experiencing technical difficulties. Please try again later.",
   server_error: "An error occurred. Please try again or contact support.",
+  rate_limited: "Too many requests. Please try again in a minute.",
+  db_error: "Unable to save your information. Please try again.",
 };
 
-interface SyncRequest {
-  leadId: string;
+// Rate limiting: in-memory store (resets on cold start, but provides basic protection)
+const requestCounts = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(ip: string, maxRequests = 10, windowMs = 60000): boolean {
+  const now = Date.now();
+  const record = requestCounts.get(ip);
+  
+  // Clean old entries periodically
+  if (requestCounts.size > 10000) {
+    for (const [key, value] of requestCounts.entries()) {
+      if (now > value.resetTime) {
+        requestCounts.delete(key);
+      }
+    }
+  }
+  
+  if (!record || now > record.resetTime) {
+    requestCounts.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  
+  if (record.count >= maxRequests) {
+    return false;
+  }
+  
+  record.count++;
+  return true;
+}
+
+function getClientIP(req: Request): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 
+         req.headers.get('cf-connecting-ip') || 
+         req.headers.get('x-real-ip') ||
+         'unknown';
+}
+
+interface LeadSubmission {
   name: string;
   email: string;
   phone: string;
@@ -49,18 +86,12 @@ interface CrmResponse {
 }
 
 // Validation functions
-function isValidUUID(str: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(str);
-}
-
 function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email) && email.length <= 255;
 }
 
 function isValidName(name: string): boolean {
-  // Allow letters, spaces, hyphens, apostrophes
   const nameRegex = /^[a-zA-Z\s'-]+$/;
   return nameRegex.test(name) && name.length >= 2 && name.length <= 100;
 }
@@ -73,35 +104,25 @@ function sanitizeString(str: string, maxLength: number = 100): string {
   return str.trim().slice(0, maxLength);
 }
 
-function validateRequest(body: SyncRequest): { valid: boolean; error: string } {
-  // Check required fields exist
-  if (!body.leadId || !body.name || !body.email || !body.phone) {
+function validateRequest(body: LeadSubmission): { valid: boolean; error: string } {
+  if (!body.name || !body.email || !body.phone) {
     return { valid: false, error: SAFE_ERRORS.missing_fields };
   }
 
-  // Validate leadId format
-  if (!isValidUUID(body.leadId)) {
-    return { valid: false, error: SAFE_ERRORS.invalid_lead };
-  }
-
-  // Validate name
   const trimmedName = body.name.trim();
   if (!isValidName(trimmedName)) {
     return { valid: false, error: SAFE_ERRORS.invalid_name };
   }
 
-  // Validate email
   if (!isValidEmail(body.email.trim())) {
     return { valid: false, error: SAFE_ERRORS.invalid_email };
   }
 
-  // Validate phone (after stripping non-digits)
   const phoneDigits = body.phone.replace(/\D/g, "");
   if (phoneDigits.length !== 10) {
     return { valid: false, error: SAFE_ERRORS.invalid_phone };
   }
 
-  // Validate debt amount
   if (!isValidDebtAmount(body.debtAmount)) {
     return { valid: false, error: SAFE_ERRORS.invalid_debt };
   }
@@ -118,44 +139,92 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Only allow POST
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ success: false, error: "Method not allowed" }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   try {
-    const body: SyncRequest = await req.json();
-    console.log("Received sync request for lead:", body.leadId);
+    // Rate limiting by IP
+    const clientIP = getClientIP(req);
+    if (!checkRateLimit(clientIP)) {
+      console.warn(`Rate limit exceeded for IP: ${clientIP}`);
+      return new Response(
+        JSON.stringify({ success: false, error: SAFE_ERRORS.rate_limited }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const body: LeadSubmission = await req.json();
+    console.log("Received lead submission from IP:", clientIP);
 
     // Comprehensive validation
     const validation = validateRequest(body);
     if (!validation.valid) {
-      console.error("Validation failed for lead:", body.leadId);
+      console.error("Validation failed:", validation.error);
       return new Response(
         JSON.stringify({ success: false, error: validation.error }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Transform and sanitize name: split on first space
+    // Initialize Supabase client with service role for database operations
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Sanitize all input fields
     const sanitizedName = sanitizeString(body.name.trim(), 100);
-    const nameParts = sanitizedName.split(" ");
-    const firstName = sanitizeString(nameParts[0] || "", 50);
-    const lastName = nameParts.length > 1 ? sanitizeString(nameParts.slice(1).join(" "), 50) : "Unknown";
-
-    // Transform phone: strip all non-numeric characters
-    const phoneNumber = body.phone.replace(/\D/g, "").slice(0, 10);
-
-    // Sanitize other fields
-    const sanitizedEmail = sanitizeString(body.email.trim(), 255);
+    const sanitizedEmail = sanitizeString(body.email.trim().toLowerCase(), 255);
+    const sanitizedPhone = body.phone.replace(/\D/g, "").slice(0, 10);
     const sanitizedDebtTypes = (body.debtTypes || []).map(t => sanitizeString(String(t), 50)).slice(0, 10);
     const sanitizedEmployment = sanitizeString(body.employmentStatus || "", 50);
     const sanitizedPayments = sanitizeString(body.behindOnPayments || "", 50);
     const sanitizedTimeline = sanitizeString(body.timelineGoal || "", 100);
+    const sanitizedDebtAmount = Math.min(Math.max(body.debtAmount || 0, 0), 10000000);
 
-    // Build CRM payload
+    // Step 1: Insert lead into database (using service role key)
+    const { data: insertedLead, error: insertError } = await supabase
+      .from("leads")
+      .insert({
+        name: sanitizedName,
+        email: sanitizedEmail,
+        phone: sanitizedPhone,
+        debt_amount: sanitizedDebtAmount,
+        debt_types: sanitizedDebtTypes,
+        employment_status: sanitizedEmployment || null,
+        behind_on_payments: sanitizedPayments || null,
+        timeline_goal: sanitizedTimeline || null,
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error("Failed to insert lead:", insertError.message);
+      return new Response(
+        JSON.stringify({ success: false, error: SAFE_ERRORS.db_error }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("Lead inserted with ID:", insertedLead.id);
+
+    // Step 2: Transform name for CRM (split on first space)
+    const nameParts = sanitizedName.split(" ");
+    const firstName = sanitizeString(nameParts[0] || "", 50);
+    const lastName = nameParts.length > 1 ? sanitizeString(nameParts.slice(1).join(" "), 50) : "Unknown";
+
+    // Step 3: Build CRM payload
     const crmPayload = {
       Token: Deno.env.get("CRM_API_TOKEN"),
       FirstName: firstName,
       LastName: lastName,
-      PhoneNumber: phoneNumber,
+      PhoneNumber: sanitizedPhone,
       Email: sanitizedEmail,
-      DebtAmount: Math.min(Math.max(body.debtAmount, 0), 10000000),
+      DebtAmount: sanitizedDebtAmount,
       AllowDuplicate: "N",
       Tags: [
         { Key: "Debt Types", Value: sanitizedDebtTypes.join(", ") },
@@ -170,7 +239,7 @@ Deno.serve(async (req) => {
       Token: "[REDACTED]",
     });
 
-    // Call CRM API
+    // Step 4: Call CRM API
     const crmResponse = await fetch("https://api.globalholdings.app/api/LeadDataUpload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -181,27 +250,22 @@ Deno.serve(async (req) => {
     console.log("CRM API response status:", crmResponse.status, "Message:", crmData.Message);
 
     if (!crmResponse.ok || crmData.Errors?.length > 0) {
-      // Log detailed error server-side, return generic message to client
       console.error("CRM API returned errors:", crmData.Errors);
+      // Lead is already saved locally, just note CRM sync failed
       return new Response(
-        JSON.stringify({ success: false, error: SAFE_ERRORS.crm_error }),
+        JSON.stringify({ success: true, leadId: insertedLead.id, crmSynced: false }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Update lead with CRM ID if successful
+    // Step 5: Update lead with CRM ID if successful
     if (crmData.Data?.PrimeCrmId) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
       const { error: updateError } = await supabase
         .from("leads")
         .update({ crm_id: crmData.Data.PrimeCrmId })
-        .eq("id", body.leadId);
+        .eq("id", insertedLead.id);
 
       if (updateError) {
-        // Log error but don't expose to client
         console.error("Failed to update lead with CRM ID:", updateError.message);
       } else {
         console.log("Updated lead with CRM ID:", crmData.Data.PrimeCrmId);
@@ -209,14 +273,12 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, leadId: insertedLead.id, crmSynced: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    // Log full error server-side
     console.error("Error in sync-to-crm:", error instanceof Error ? error.message : "Unknown error");
     
-    // Return generic error to client
     return new Response(
       JSON.stringify({ success: false, error: SAFE_ERRORS.server_error }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

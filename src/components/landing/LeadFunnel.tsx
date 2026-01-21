@@ -30,24 +30,10 @@ const LeadFunnel = ({ initialDebtAmount, onClose }: LeadFunnelProps) => {
   const handleSubmit = async (data: ContactFormData) => {
     setIsSubmitting(true);
     try {
-      // 1. Save to local database
-      const { data: insertedLead, error } = await supabase.from("leads").insert({
-        name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        phone: data.phone.trim(),
-        debt_amount: debtAmount,
-        debt_types: selectedDebtTypes,
-        employment_status: employmentStatus,
-        behind_on_payments: behindOnPayments,
-        timeline_goal: timelineGoal,
-      }).select('id').single();
-
-      if (error) throw error;
-
-      // 2. Sync to CRM (fire and forget - errors logged but don't affect user)
-      supabase.functions.invoke('sync-to-crm', {
+      // All lead creation and CRM sync happens in the edge function
+      // This ensures proper rate limiting and validation server-side
+      const { data: result, error } = await supabase.functions.invoke('sync-to-crm', {
         body: {
-          leadId: insertedLead.id,
           name: data.name.trim(),
           email: data.email.trim().toLowerCase(),
           phone: data.phone.trim(),
@@ -57,14 +43,24 @@ const LeadFunnel = ({ initialDebtAmount, onClose }: LeadFunnelProps) => {
           behindOnPayments,
           timelineGoal,
         }
-      }).catch(err => console.error('CRM sync failed:', err));
+      });
 
-      // 3. Show success regardless of CRM result
+      if (error) {
+        console.error('Lead submission failed:', error);
+        throw new Error(error.message || 'Submission failed');
+      }
+
+      if (!result?.success) {
+        throw new Error(result?.error || 'Submission failed');
+      }
+
+      // Show success
       setStep(7);
     } catch (error) {
+      console.error('Form submission error:', error);
       toast({
         title: "Error",
-        description: "Something went wrong. Please try again or call us.",
+        description: error instanceof Error ? error.message : "Something went wrong. Please try again or call us.",
         variant: "destructive",
       });
     } finally {
