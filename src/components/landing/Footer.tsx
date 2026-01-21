@@ -1,5 +1,6 @@
 import { Phone, Mail, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
+import logoLight from "@/assets/TrueHorizonLogoLight.png";
 
 const Footer = () => {
   return (
@@ -9,15 +10,11 @@ const Footer = () => {
         <div className="grid md:grid-cols-4 gap-8">
           {/* Company info */}
           <div className="md:col-span-2">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">TH</span>
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-background">True Horizon</h3>
-                <p className="text-xs text-background/60">Financial</p>
-              </div>
-            </div>
+            <img 
+              src={logoLight} 
+              alt="True Horizon Financial" 
+              className="h-12 md:h-14 w-auto mb-4"
+            />
             <p className="text-background/70 mb-6 max-w-md">
               Helping Americans take control of their financial future through personalized debt relief, consolidation, and credit improvement solutions.
             </p>
