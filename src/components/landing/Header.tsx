@@ -15,10 +15,10 @@ const Header = () => {
           />
 
           {/* Phone CTA */}
-          <a href="tel:1-800-555-0123" className="flex items-center gap-2">
+          <a href="tel:1-855-417-1393" className="flex items-center gap-2">
             <Button variant="default" size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground font-semibold gap-2">
               <Phone className="h-4 w-4" />
-              <span className="hidden sm:inline">1-800-555-0123</span>
+              <span className="hidden sm:inline">1-855-417-1393</span>
               <span className="sm:hidden">Call Now</span>
             </Button>
           </a>

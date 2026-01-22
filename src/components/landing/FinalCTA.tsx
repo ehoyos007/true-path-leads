@@ -27,14 +27,14 @@ const FinalCTA = ({ onGetStarted }: FinalCTAProps) => {
               <ArrowRight className="h-5 w-5" />
             </Button>
             
-            <a href="tel:1-800-555-0123">
+            <a href="tel:1-855-417-1393">
               <Button
                 variant="outline"
                 size="lg"
                 className="bg-transparent border-2 border-primary-foreground/50 text-primary-foreground hover:bg-primary-foreground/10 font-semibold text-lg px-8 py-6 gap-2 w-full sm:w-auto"
               >
                 <Phone className="h-5 w-5" />
-                1-800-555-0123
+                1-855-417-1393
               </Button>
             </a>
           </div>
