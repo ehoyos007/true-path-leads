@@ -19,9 +19,9 @@ const Footer = () => {
               Helping Americans take control of their financial future through personalized debt relief, consolidation, and credit improvement solutions.
             </p>
             <div className="space-y-2">
-              <a href="tel:1-800-555-0123" className="flex items-center gap-2 text-background/70 hover:text-accent transition-colors">
+              <a href="tel:1-855-417-1393" className="flex items-center gap-2 text-background/70 hover:text-accent transition-colors">
                 <Phone className="h-4 w-4" />
-                1-800-555-0123
+                1-855-417-1393
               </a>
               <a href="mailto:notifications@thfinancial.org" className="flex items-center gap-2 text-background/70 hover:text-accent transition-colors">
                 <Mail className="h-4 w-4" />
