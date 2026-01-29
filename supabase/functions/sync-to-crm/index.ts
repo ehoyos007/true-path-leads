@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ALLOWED_ORIGINS = [
   "https://true-path-leads.lovable.app",
   "https://id-preview--55cc102a-7149-4f38-9a53-c0d5518a34ce.lovable.app",
+  "https://thfinancial.org",
   "http://localhost:5173",
   "http://localhost:8080",
 ];
@@ -13,7 +14,7 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
   
   return {
     "Access-Control-Allow-Origin": isAllowed && origin ? origin : ALLOWED_ORIGINS[0],
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 }
