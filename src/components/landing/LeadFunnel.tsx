@@ -42,6 +42,7 @@ const LeadFunnel = ({ initialDebtAmount, onClose }: LeadFunnelProps) => {
           employmentStatus,
           behindOnPayments,
           timelineGoal,
+          smsOptIn: true,
         }
       });
 
