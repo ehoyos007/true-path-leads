@@ -1,46 +1,83 @@
 
-# Fix CORS Configuration for Custom Domain
 
-## Problem Identified
-The lead form submission is being blocked because your custom domain `https://thfinancial.org` is not in the allowed origins list of the `sync-to-crm` backend function. The browser's CORS security policy prevents the request from completing.
+# Add SMS Opt-In Consent Checkbox to Lead Form
 
-## Solution
-Add your custom domain to the allowed origins list in the backend function.
+## Current State
+
+The lead capture form (`ContactStep.tsx`) does **not** have an SMS opt-in consent checkbox. The form only collects:
+- Full Name
+- Email
+- Phone
+
+No TCPA-compliant SMS consent language is present.
 
 ## Changes Required
 
-### 1. Update Backend Function
+### 1. Update Contact Form Component
+
+**File:** `src/components/landing/funnel/ContactStep.tsx`
+
+Add the following:
+
+- Import the Checkbox component and Link from react-router-dom
+- Add `smsOptIn` field to the Zod schema (boolean, required, must be true)
+- Add a checkbox field below the phone number input with the consent language
+- Make "Privacy Policy" a link to `/privacy`
+- Style the checkbox and label with smaller, muted text
+
+**Consent Language:**
+> "I agree to receive text messages from True Horizon Financial LLC regarding my financial consultation. Message frequency varies. Message and data rates may apply. Reply STOP to opt out at any time. View our Privacy Policy."
+
+### 2. Update Data Flow
+
+**File:** `src/components/landing/LeadFunnel.tsx`
+
+- Add `smsOptIn: true` to the form submission payload sent to the backend function
+
+### 3. Update Backend Function
+
 **File:** `supabase/functions/sync-to-crm/index.ts`
 
-Add `https://thfinancial.org` to the `ALLOWED_ORIGINS` array:
+- Add `smsOptIn` to the `LeadSubmission` interface
+- Include `sms_opt_in` in the database insert
+- Add an "SMS Consent" tag to the CRM payload for tracking
 
-```javascript
-const ALLOWED_ORIGINS = [
-  "https://true-path-leads.lovable.app",
-  "https://id-preview--55cc102a-7149-4f38-9a53-c0d5518a34ce.lovable.app",
-  "https://thfinancial.org",  // <-- Add this line
-  "http://localhost:5173",
-  "http://localhost:8080",
-];
+### 4. Add Database Column
+
+Create a migration to add the `sms_opt_in` column to the `leads` table:
+
+```sql
+ALTER TABLE public.leads 
+ADD COLUMN sms_opt_in boolean NOT NULL DEFAULT false;
 ```
-
-### 2. Update CORS Headers
-Also update the `Access-Control-Allow-Headers` to include all headers that may be sent by the client:
-
-```javascript
-"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-```
-
----
 
 ## Technical Details
 
-| Item | Details |
-|------|---------|
-| Root Cause | Custom domain `thfinancial.org` missing from CORS whitelist |
-| File to Edit | `supabase/functions/sync-to-crm/index.ts` |
-| Lines Affected | 4-9 (ALLOWED_ORIGINS array), 17 (headers) |
-| Deployment | Automatic after code update |
+| Component | Change |
+|-----------|--------|
+| `ContactStep.tsx` | Add checkbox field with Zod validation, consent text, and Privacy Policy link |
+| `LeadFunnel.tsx` | Pass `smsOptIn: true` in API call body |
+| `sync-to-crm/index.ts` | Accept and store `sms_opt_in`, send to CRM as tag |
+| Database | Add `sms_opt_in` boolean column |
 
-## Post-Fix Verification
-After the fix is deployed, test the lead form end-to-end from `https://thfinancial.org` to confirm submissions work correctly.
+## Compliance Checklist
+
+The consent language meets TCPA requirements by clearly stating:
+
+| Requirement | Addressed |
+|-------------|-----------|
+| Who is sending messages | True Horizon Financial LLC |
+| What messages are about | Financial consultation |
+| Data rates may apply | Yes |
+| How to opt out | Reply STOP |
+| Link to Privacy Policy | Yes (/privacy) |
+| Required before submission | Yes (checkbox must be checked) |
+
+## Visual Design
+
+- Checkbox and label will use `text-xs` (12px) font size
+- Text color will be `text-muted-foreground` for subtle appearance
+- Checkbox will use standard primary color when checked
+- Privacy Policy link will be styled as an underlined link
+- Positioned directly below the Phone field
+
