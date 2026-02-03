@@ -78,6 +78,7 @@ interface LeadSubmission {
   employmentStatus: string;
   behindOnPayments: string;
   timelineGoal: string;
+  smsOptIn?: boolean;
 }
 
 interface CrmResponse {
@@ -199,6 +200,7 @@ Deno.serve(async (req) => {
         employment_status: sanitizedEmployment || null,
         behind_on_payments: sanitizedPayments || null,
         timeline_goal: sanitizedTimeline || null,
+        sms_opt_in: body.smsOptIn === true,
       })
       .select('id')
       .single();
@@ -232,6 +234,7 @@ Deno.serve(async (req) => {
         { Key: "Employment Status", Value: sanitizedEmployment },
         { Key: "Behind On Payments", Value: sanitizedPayments },
         { Key: "Timeline Goal", Value: sanitizedTimeline },
+        { Key: "SMS Consent", Value: body.smsOptIn === true ? "Yes" : "No" },
       ],
     };
 

@@ -27,6 +27,7 @@ export type Database = {
           name: string
           notes: string | null
           phone: string
+          sms_opt_in: boolean
           status: Database["public"]["Enums"]["lead_status"]
           timeline_goal: string | null
           updated_at: string
@@ -43,6 +44,7 @@ export type Database = {
           name: string
           notes?: string | null
           phone: string
+          sms_opt_in?: boolean
           status?: Database["public"]["Enums"]["lead_status"]
           timeline_goal?: string | null
           updated_at?: string
@@ -59,6 +61,7 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string
+          sms_opt_in?: boolean
           status?: Database["public"]["Enums"]["lead_status"]
           timeline_goal?: string | null
           updated_at?: string
