@@ -1,83 +1,190 @@
 
 
-# Add SMS Opt-In Consent Checkbox to Lead Form
+# Mobile Performance Optimization Plan
 
-## Current State
+## Current State Analysis
 
-The lead capture form (`ContactStep.tsx`) does **not** have an SMS opt-in consent checkbox. The form only collects:
-- Full Name
-- Email
-- Phone
+After exploring the codebase, I identified several areas affecting the 69% mobile performance score:
 
-No TCPA-compliant SMS consent language is present.
+### Key Issues Found
 
-## Changes Required
+1. **Large Bundle Size**: All landing page components load synchronously on initial page load, including the LeadFunnel (modal) which is only shown when user clicks a button
+2. **Heavy Dependencies**: The project includes libraries that aren't used on the main landing page (recharts, react-day-picker, cmdk, react-resizable-panels)
+3. **No Route-Based Code Splitting**: PrivacyPolicy and NotFound pages are bundled with the main entry point
+4. **Logo Images**: Still using PNG format instead of optimized WebP
+5. **Above-the-fold Content**: Some optimizations can be made to prioritize critical rendering
 
-### 1. Update Contact Form Component
+---
 
-**File:** `src/components/landing/funnel/ContactStep.tsx`
+## Optimization Strategy
 
-Add the following:
+### Phase 1: Code Splitting and Lazy Loading (High Impact)
 
-- Import the Checkbox component and Link from react-router-dom
-- Add `smsOptIn` field to the Zod schema (boolean, required, must be true)
-- Add a checkbox field below the phone number input with the consent language
-- Make "Privacy Policy" a link to `/privacy`
-- Style the checkbox and label with smaller, muted text
+**1.1 Lazy Load the LeadFunnel Modal**
+The entire funnel (7 step components + form libraries) only loads when user clicks "Get Started". This should be lazy loaded.
 
-**Consent Language:**
-> "I agree to receive text messages from True Horizon Financial LLC regarding my financial consultation. Message frequency varies. Message and data rates may apply. Reply STOP to opt out at any time. View our Privacy Policy."
-
-### 2. Update Data Flow
-
-**File:** `src/components/landing/LeadFunnel.tsx`
-
-- Add `smsOptIn: true` to the form submission payload sent to the backend function
-
-### 3. Update Backend Function
-
-**File:** `supabase/functions/sync-to-crm/index.ts`
-
-- Add `smsOptIn` to the `LeadSubmission` interface
-- Include `sms_opt_in` in the database insert
-- Add an "SMS Consent" tag to the CRM payload for tracking
-
-### 4. Add Database Column
-
-Create a migration to add the `sms_opt_in` column to the `leads` table:
-
-```sql
-ALTER TABLE public.leads 
-ADD COLUMN sms_opt_in boolean NOT NULL DEFAULT false;
+```text
+Before: LeadFunnel imported at top of Index.tsx
+After:  const LeadFunnel = lazy(() => import("..."))
 ```
 
-## Technical Details
+**1.2 Route-Based Code Splitting**
+Split PrivacyPolicy and NotFound into separate chunks:
 
-| Component | Change |
-|-----------|--------|
-| `ContactStep.tsx` | Add checkbox field with Zod validation, consent text, and Privacy Policy link |
-| `LeadFunnel.tsx` | Pass `smsOptIn: true` in API call body |
-| `sync-to-crm/index.ts` | Accept and store `sms_opt_in`, send to CRM as tag |
-| Database | Add `sms_opt_in` boolean column |
+```text
+Before: import PrivacyPolicy from "./pages/PrivacyPolicy"
+After:  const PrivacyPolicy = lazy(() => import(...))
+```
 
-## Compliance Checklist
+**1.3 Lazy Load Below-the-Fold Sections**
+Components like Testimonials (uses embla-carousel), Services, and FinalCTA can be lazy loaded since they're below the fold.
 
-The consent language meets TCPA requirements by clearly stating:
+### Phase 2: Image Optimization
 
-| Requirement | Addressed |
-|-------------|-----------|
-| Who is sending messages | True Horizon Financial LLC |
-| What messages are about | Financial consultation |
-| Data rates may apply | Yes |
-| How to opt out | Reply STOP |
-| Link to Privacy Policy | Yes (/privacy) |
-| Required before submission | Yes (checkbox must be checked) |
+**2.1 Convert Logo to WebP Format**
+- Create optimized WebP versions of the logo
+- Use `<picture>` element with WebP as primary and PNG as fallback
+- Expected savings: ~74KB based on earlier audits
 
-## Visual Design
+### Phase 3: Vite Build Optimization
 
-- Checkbox and label will use `text-xs` (12px) font size
-- Text color will be `text-muted-foreground` for subtle appearance
-- Checkbox will use standard primary color when checked
-- Privacy Policy link will be styled as an underlined link
-- Positioned directly below the Phone field
+**3.1 Configure Manual Chunks**
+Split vendor libraries into separate cacheable chunks:
+
+```text
+manualChunks: {
+  'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+  'radix': ['@radix-ui/react-slider', '@radix-ui/react-dialog', ...],
+  'supabase': ['@supabase/supabase-js']
+}
+```
+
+### Phase 4: Critical CSS and Resource Hints
+
+**4.1 Preload Critical Assets**
+Add preload hints for the hero section's most important assets:
+
+```html
+<link rel="preload" as="image" href="/logo.webp" />
+```
+
+**4.2 Defer Non-Critical JavaScript**
+Ensure Google Tag Manager doesn't block the main thread (already async, but verify implementation).
+
+---
+
+## Implementation Details
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/App.tsx` | Add lazy loading for routes with Suspense |
+| `src/pages/Index.tsx` | Lazy load LeadFunnel and below-fold sections |
+| `vite.config.ts` | Add build optimization with manual chunks |
+| `src/components/landing/Header.tsx` | Use WebP logo with picture fallback |
+| `src/components/landing/Footer.tsx` | Use WebP logo with picture fallback |
+
+### New Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/assets/TrueHorizonLogo.webp` | Optimized header logo |
+
+---
+
+## Expected Impact
+
+| Optimization | Est. Improvement |
+|-------------|------------------|
+| Lazy load LeadFunnel | -50-80KB initial JS |
+| Route code splitting | -10-20KB initial JS |
+| Lazy load below-fold sections | -30-50KB initial JS |
+| WebP logo conversion | -74KB transfer size |
+| Vendor chunk splitting | Better caching |
+
+**Target**: Improve mobile performance score from 69% to 80%+
+
+---
+
+## Technical Implementation
+
+### 1. App.tsx - Route Code Splitting
+
+```tsx
+import { Suspense, lazy } from "react";
+
+const Index = lazy(() => import("./pages/Index"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+// Wrap routes in Suspense with minimal fallback
+<Suspense fallback={<div className="min-h-screen" />}>
+  <Routes>...</Routes>
+</Suspense>
+```
+
+### 2. Index.tsx - Lazy Load Modal and Sections
+
+```tsx
+import { lazy, Suspense } from "react";
+
+// Critical above-fold components load immediately
+import Header from "@/components/landing/Header";
+import Hero from "@/components/landing/Hero";
+import TrustBadges from "@/components/landing/TrustBadges";
+
+// Below-fold sections lazy loaded
+const DebtTypes = lazy(() => import("@/components/landing/DebtTypes"));
+const HowItWorks = lazy(() => import("@/components/landing/HowItWorks"));
+// ... etc
+
+// Modal lazy loaded (only when user clicks CTA)
+const LeadFunnel = lazy(() => import("@/components/landing/LeadFunnel"));
+```
+
+### 3. Vite Config - Build Optimization
+
+```ts
+build: {
+  rollupOptions: {
+    output: {
+      manualChunks: {
+        'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+        'ui-vendor': ['@radix-ui/react-slider', '@radix-ui/react-tooltip', ...]
+      }
+    }
+  }
+}
+```
+
+### 4. Logo Component with WebP
+
+```tsx
+<picture>
+  <source srcSet={logoWebP} type="image/webp" />
+  <img src={logoPng} alt="True Horizon Financial" ... />
+</picture>
+```
+
+---
+
+## Risks and Mitigations
+
+| Risk | Mitigation |
+|------|-----------|
+| Flash of unstyled content | Use minimal skeleton/placeholder in Suspense fallback |
+| Delayed modal loading | Preload LeadFunnel on hover/focus of CTA button |
+| Browser compatibility | Picture element has excellent support, PNG fallback included |
+
+---
+
+## Verification Steps
+
+After implementation:
+1. Run Lighthouse audit on mobile
+2. Verify all sections render correctly
+3. Test LeadFunnel opens without noticeable delay
+4. Confirm no visual regressions
+5. Check bundle analyzer for chunk sizes
 
