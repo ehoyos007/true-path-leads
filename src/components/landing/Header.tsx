@@ -1,25 +1,21 @@
 import { Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import logoWebP from "@/assets/TrueHorizonLogoNew.webp";
-import logoPng from "@/assets/TrueHorizonLogoNew.png";
+import logoPng from "@/assets/TrueHorizonLogoLight.png";
 
 const Header = () => {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-md border-b border-border">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo with WebP optimization */}
-          <picture>
-            <source srcSet={logoWebP} type="image/webp" />
-            <img 
-              src={logoPng} 
-              alt="True Horizon Financial" 
-              className="h-10 md:h-12 w-auto"
-              width={111}
-              height={40}
-              fetchPriority="high"
-            />
-          </picture>
+          {/* Logo */}
+          <img 
+            src={logoPng} 
+            alt="True Horizon Financial" 
+            className="h-10 md:h-12 w-auto"
+            width={111}
+            height={40}
+            fetchPriority="high"
+          />
 
           {/* Phone CTA */}
           <a href="tel:1-855-417-1393" className="flex items-center gap-2">
