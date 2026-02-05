@@ -1,6 +1,6 @@
 import { Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import logo from "@/assets/TrueHorizonLogo.png";
+import logo from "@/assets/TrueHorizonLogoNew.png";
 
 const Header = () => {
   return (

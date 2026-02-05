@@ -1,6 +1,6 @@
 import { Phone, Mail, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
-import logoLight from "@/assets/TrueHorizonLogoLight.png";
+import logoLight from "@/assets/TrueHorizonLogoNew.png";
 
 const Footer = () => {
   return (
