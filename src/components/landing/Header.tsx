@@ -12,6 +12,8 @@ const Header = () => {
             src={logo} 
             alt="True Horizon Financial" 
             className="h-10 md:h-12 w-auto"
+            width={133}
+            height={48}
           />
 
           {/* Phone CTA */}

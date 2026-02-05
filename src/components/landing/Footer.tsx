@@ -14,6 +14,9 @@ const Footer = () => {
               src={logoLight} 
               alt="True Horizon Financial" 
               className="h-12 md:h-14 w-auto mb-4"
+              width={156}
+              height={56}
+              loading="lazy"
             />
             <p className="text-background/70 mb-6 max-w-md">
               Helping Americans take control of their financial future through personalized debt relief, consolidation, and credit improvement solutions.
