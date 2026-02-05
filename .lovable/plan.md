@@ -1,211 +1,149 @@
 
 
-# Mobile PageSpeed Optimization Plan
+# Fix PageSpeed Regression - Root Cause and Recovery Plan
 
-## Current State Summary
+## What Went Wrong
 
-After analyzing the codebase, several optimizations are already in place:
-- Route-based code splitting with `React.lazy()`
-- Lazy loading for below-the-fold sections and LeadFunnel modal
-- Vite manual chunks configuration for vendor splitting
-- Deferred Google Tag Manager loading (2s after page load)
-- Critical font-face CSS inlined in `index.html`
-- Non-blocking font loading strategy
+The PageSpeed score improved in some areas but **LCP got significantly worse** due to one critical mistake:
 
-However, the PageSpeed report indicates remaining issues with:
-1. **Unused JavaScript** (~216 KB wasted, 59% of main bundle unused)
-2. **Render-blocking resources** (~600ms from CSS and fonts)
-3. **Largest Contentful Paint** (~5.4s estimated savings)
+### The Problem: Bloated WebP Image (1,004 KiB!)
 
----
+The AI-generated WebP file `TrueHorizon_Original.webp` is **over 1 MB** - this is catastrophically large for a logo that displays at only 179x70 pixels. This single image accounts for:
 
-## Optimization Strategy
+- **70% of total page weight** (1,004 KiB out of 1,432 KiB)
+- **LCP increased to 7.3 seconds** (the image is the LCP element)
+- **Element render delay: 2,300ms** just waiting for this image
 
-### Phase 1: Eliminate Dead Code and Unused CSS
-
-**1.1 Remove Unused CSS File**
-The file `src/App.css` contains legacy Vite template styles that are not used anywhere in the application (no import found). Removing it eliminates dead code.
-
-**1.2 Tree-Shake Unused Radix UI Components**
-The project installs 25+ Radix UI packages but the landing page only uses:
-- `@radix-ui/react-slider` (DebtSlider)
-- `@radix-ui/react-dialog` (potential modals)
-- `@radix-ui/react-toast` (notifications)
-- `@radix-ui/react-tooltip` (optional)
-- `@radix-ui/react-checkbox` (funnel forms)
-- `@radix-ui/react-radio-group` (funnel forms)
-- `@radix-ui/react-progress` (FunnelProgress)
-- `@radix-ui/react-label` (form labels)
-- `@radix-ui/react-slot` (Button primitive)
-
-Update the Vite chunk configuration to only include actively used Radix components.
-
-**1.3 Remove Unused Dependencies from Bundle**
-These packages are installed but not used on the landing page:
-- `recharts` - Only included if using charts (not visible on landing)
-- `react-day-picker` / `date-fns` - Calendar component not used
-- `cmdk` - Command palette not used
-- `react-resizable-panels` - Resizable panels not used
-
-These will be tree-shaken if not imported, but verifying no accidental imports exist.
+The original PNG file was likely ~74 KB (based on earlier audit), so the WebP conversion made it **14x larger** instead of smaller.
 
 ---
 
-### Phase 2: Critical CSS Extraction
+## Current vs Previous Metrics
 
-**2.1 Inline Critical Hero CSS**
-Extract and inline the critical CSS needed for above-the-fold content (Header, Hero, TrustBadges) directly in `index.html`. This eliminates the 302ms render-blocking CSS request.
+| Metric | Before Changes | After Changes | Change |
+|--------|---------------|---------------|--------|
+| Performance Score | Unknown | 67 | - |
+| LCP | ~5.4s | 7.3s | Worse |
+| FCP | - | 2.1s | - |
+| CLS | - | 0 | Good |
+| TBT | - | 80ms | Good |
 
-Key styles to inline:
-- Hero gradient background
-- Container/layout primitives
-- Typography for hero headings
-- Button styles for CTA
-- Glass card effect
+---
 
-**2.2 Defer Non-Critical CSS**
-Load the main CSS bundle asynchronously using the same pattern as fonts:
-```html
-<link rel="preload" as="style" href="[css-bundle]">
-<link href="[css-bundle]" rel="stylesheet" media="print" onload="this.media='all'">
+## Recovery Plan
+
+### Phase 1: Remove Bloated WebP Files (Immediate Fix)
+
+**1.1 Delete the problematic WebP files**
+
+Remove the AI-generated WebP files that are larger than the originals:
+- `src/assets/TrueHorizon_Original.webp` (1 MB - delete)
+- `src/assets/TrueHorizonLogoLight.webp` (unknown size - delete)
+
+**1.2 Revert Header.tsx to use PNG only**
+
+```tsx
+// Before (broken)
+import logoPng from "@/assets/TrueHorizon_Original.png";
+import logoWebp from "@/assets/TrueHorizon_Original.webp";
+...
+<picture>
+  <source srcSet={logoWebp} type="image/webp" />
+  <img src={logoPng} ... />
+</picture>
+
+// After (fixed)
+import logoPng from "@/assets/TrueHorizon_Original.png";
+...
+<img src={logoPng} ... />
+```
+
+**1.3 Revert Footer.tsx to use PNG only**
+
+Same pattern - remove WebP import and `<picture>` element, use direct `<img>` with PNG.
+
+---
+
+### Phase 2: Properly Size the Logo Image
+
+The PageSpeed report shows:
+- **Current image dimensions**: 1632x640 pixels
+- **Displayed dimensions**: 179x70 pixels  
+- **Estimated savings**: 991.4 KiB
+
+The logo image is 9x larger than needed. The fix is to create a properly sized version.
+
+**2.1 Create a resized logo (manual step required)**
+
+The user should resize `TrueHorizon_Original.png` to approximately:
+- Width: 360px (2x display size for retina)
+- Height: auto (maintain aspect ratio)
+- Format: PNG with transparency (or properly compressed WebP)
+
+This alone should reduce the image from ~74 KB to ~5-10 KB.
+
+**2.2 Alternative: Use CSS to constrain and add responsive images**
+
+If the user cannot resize the image, we can use `srcset` with the original image but add proper sizing hints:
+
+```tsx
+<img 
+  src={logoPng} 
+  alt="True Horizon Financial" 
+  className="h-10 md:h-12 w-auto"
+  width={111}
+  height={40}
+  fetchPriority="high"
+  decoding="async"
+/>
 ```
 
 ---
 
-### Phase 3: Image Optimization
+### Phase 3: Retain Good Optimizations
 
-**3.1 Create Optimized WebP Logo**
-Convert `TrueHorizon_Original.png` to WebP format with proper transparency. This provides ~60-80% size reduction while maintaining quality.
+The following changes from the previous plan were beneficial and should be kept:
 
-**3.2 Add Preload for LCP Image**
-The logo in the Header is likely the LCP element. Add a preload hint:
-```html
-<link rel="preload" as="image" href="/assets/logo.webp" type="image/webp">
-```
-
----
-
-### Phase 4: Further JavaScript Optimization
-
-**4.1 Preload Critical Chunks**
-Add `modulepreload` hints for the Index page chunk to start loading immediately:
-```html
-<link rel="modulepreload" href="/assets/index-[hash].js">
-```
-
-**4.2 Optimize Lucide Icons Import**
-Currently importing from `lucide-react` brings in tree-shakeable exports, but ensure only specific icons are imported (already done correctly in the codebase).
+1. Vite chunk splitting (radix-core, radix-form, radix-feedback) - improves caching
+2. Deferred Google Tag Manager (2s after load)
+3. Inlined critical font-face CSS
+4. Deleted unused `src/App.css`
 
 ---
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `index.html` | Add critical CSS inline, preload hints for LCP image, modulepreload for JS |
-| `vite.config.ts` | Refine manualChunks to only include used Radix packages |
-| `src/App.css` | Delete (unused legacy file) |
-| `src/components/landing/Header.tsx` | Use WebP logo with `<picture>` fallback |
-| `src/components/landing/Footer.tsx` | Use WebP logo with `<picture>` fallback |
-
-## New Files
-
-| File | Purpose |
-|------|---------|
-| `src/assets/TrueHorizon_Original.webp` | Optimized WebP version of the logo |
+| File | Action |
+|------|--------|
+| `src/assets/TrueHorizon_Original.webp` | Delete |
+| `src/assets/TrueHorizonLogoLight.webp` | Delete |
+| `src/components/landing/Header.tsx` | Remove WebP, use PNG only |
+| `src/components/landing/Footer.tsx` | Remove WebP, use PNG only |
 
 ---
 
-## Expected Impact
+## Expected Impact After Fix
 
-| Optimization | Estimated Improvement |
-|-------------|----------------------|
-| Remove unused App.css | -0.5 KB, cleaner build |
-| Refine Radix chunks | Better cache efficiency |
-| Inline critical CSS | -302 ms render-blocking |
-| WebP logo conversion | -50-80% image size |
-| Preload LCP image | Faster LCP timing |
-| Modulepreload hints | Parallel JS loading |
-
-**Target**: Improve mobile performance score from current level toward 80%+
+| Metric | Current | Expected After Fix |
+|--------|---------|-------------------|
+| Total Page Weight | 1,432 KiB | ~400 KiB |
+| Logo Image Size | 1,004 KiB | ~74 KiB (original) |
+| LCP | 7.3s | ~3-4s |
+| Performance Score | 67 | 75-85+ |
 
 ---
 
-## Technical Implementation Details
+## Future Recommendation (Manual Step)
 
-### Critical CSS to Inline
+For the best performance, the user should:
 
-```css
-/* Minimal critical styles for above-the-fold rendering */
-:root {
-  --primary: 217 91% 45%;
-  --primary-foreground: 0 0% 100%;
-  --accent: 16 85% 55%;
-  --background: 210 33% 98%;
-  --foreground: 222 47% 15%;
-  --card: 0 0% 100%;
-  --border: 214 32% 85%;
-  --muted-foreground: 215 16% 47%;
-  --success: 142 71% 45%;
-  --hero-gradient-start: 217 91% 30%;
-  --hero-gradient-end: 217 91% 50%;
-}
-body { margin: 0; font-family: 'Inter', system-ui, sans-serif; }
-.hero-gradient { 
-  background: linear-gradient(135deg, hsl(217 91% 30%) 0%, hsl(217 91% 50%) 100%); 
-}
-.container { max-width: 1400px; margin: 0 auto; padding: 0 2rem; }
-```
+1. Use a tool like [Squoosh.app](https://squoosh.app) to:
+   - Resize the logo to 360x~130px (2x retina)
+   - Export as WebP with quality 80-85%
+   - This should result in a ~5-15 KB file
 
-### Updated Vite Config
-
-```typescript
-manualChunks: {
-  'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-  'supabase': ['@supabase/supabase-js'],
-  'query': ['@tanstack/react-query'],
-  'radix-core': [
-    '@radix-ui/react-slider',
-    '@radix-ui/react-dialog',
-    '@radix-ui/react-slot',
-    '@radix-ui/react-label',
-  ],
-  'radix-form': [
-    '@radix-ui/react-checkbox',
-    '@radix-ui/react-radio-group',
-    '@radix-ui/react-progress',
-  ],
-  'radix-feedback': [
-    '@radix-ui/react-toast',
-    '@radix-ui/react-tooltip',
-  ],
-}
-```
-
-### WebP Picture Element
-
-```tsx
-<picture>
-  <source srcSet={logoWebP} type="image/webp" />
-  <img src={logoPng} alt="True Horizon Financial" ... />
-</picture>
-```
-
----
-
-## Verification Steps
-
-After implementing these changes:
-
-1. Run `npm run build` and check bundle sizes
-2. Publish the changes
-3. Re-run PageSpeed Insights on mobile
-4. Verify:
-   - Render-blocking resources reduced
-   - Unused JavaScript decreased
-   - LCP improved
-   - No visual regressions
-5. Test the lead funnel to ensure lazy loading works correctly
+2. Replace the original PNG with the optimized version
+3. Re-implement the WebP with `<picture>` element
 
 ---
 
@@ -213,7 +151,7 @@ After implementing these changes:
 
 | Risk | Mitigation |
 |------|-----------|
-| Flash of unstyled content from deferred CSS | Inline sufficient critical CSS for above-the-fold |
-| Breaking changes from chunk reorganization | Test all interactive elements after build |
-| WebP browser compatibility | Use `<picture>` with PNG fallback |
+| Removing WebP loses potential optimization | Using original PNG is still far better than 1MB WebP |
+| Original PNG still larger than ideal | Works now, can optimize later with manual resize |
+| Visual regression | Using same PNG as before the broken changes |
 
