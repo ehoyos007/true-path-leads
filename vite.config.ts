@@ -28,17 +28,23 @@ export default defineConfig(({ mode }) => ({
           'supabase': ['@supabase/supabase-js'],
           // TanStack Query
           'query': ['@tanstack/react-query'],
-          // UI components - Radix primitives
-          'radix-ui': [
+          // Radix core - used on initial load
+          'radix-core': [
             '@radix-ui/react-slider',
-            '@radix-ui/react-toast',
-            '@radix-ui/react-tooltip',
             '@radix-ui/react-dialog',
             '@radix-ui/react-slot',
             '@radix-ui/react-label',
+          ],
+          // Radix form - used in funnel forms
+          'radix-form': [
             '@radix-ui/react-checkbox',
             '@radix-ui/react-radio-group',
             '@radix-ui/react-progress',
+          ],
+          // Radix feedback - toast/tooltip
+          'radix-feedback': [
+            '@radix-ui/react-toast',
+            '@radix-ui/react-tooltip',
           ],
         },
       },

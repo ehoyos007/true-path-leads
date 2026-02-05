@@ -1,6 +1,7 @@
 import { Phone, Mail, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
 import logoPng from "@/assets/TrueHorizonLogoLight.png";
+import logoWebp from "@/assets/TrueHorizonLogoLight.webp";
 
 const Footer = () => {
   return (
@@ -10,14 +11,17 @@ const Footer = () => {
         <div className="grid md:grid-cols-4 gap-8">
           {/* Company info */}
           <div className="md:col-span-2">
-            <img 
-              src={logoPng} 
-              alt="True Horizon Financial" 
-              className="h-12 md:h-14 w-auto mb-4"
-              width={133}
-              height={48}
-              loading="lazy"
-            />
+            <picture>
+              <source srcSet={logoWebp} type="image/webp" />
+              <img 
+                src={logoPng} 
+                alt="True Horizon Financial" 
+                className="h-12 md:h-14 w-auto mb-4"
+                width={133}
+                height={48}
+                loading="lazy"
+              />
+            </picture>
             <p className="text-background/70 mb-6 max-w-md">
               Helping Americans take control of their financial future through personalized debt relief, consolidation, and credit improvement solutions.
             </p>
