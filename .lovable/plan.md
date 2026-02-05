@@ -1,164 +1,188 @@
 
 
-# Mobile Performance Optimization Plan
+# Mobile PageSpeed Optimization Plan
 
-## Current State Analysis
+## Current State Summary
 
-After exploring the codebase, I identified several areas affecting the 69% mobile performance score:
+After analyzing the codebase, several optimizations are already in place:
+- Route-based code splitting with `React.lazy()`
+- Lazy loading for below-the-fold sections and LeadFunnel modal
+- Vite manual chunks configuration for vendor splitting
+- Deferred Google Tag Manager loading (2s after page load)
+- Critical font-face CSS inlined in `index.html`
+- Non-blocking font loading strategy
 
-### Key Issues Found
-
-1. **Large Bundle Size**: All landing page components load synchronously on initial page load, including the LeadFunnel (modal) which is only shown when user clicks a button
-2. **Heavy Dependencies**: The project includes libraries that aren't used on the main landing page (recharts, react-day-picker, cmdk, react-resizable-panels)
-3. **No Route-Based Code Splitting**: PrivacyPolicy and NotFound pages are bundled with the main entry point
-4. **Logo Images**: Still using PNG format instead of optimized WebP
-5. **Above-the-fold Content**: Some optimizations can be made to prioritize critical rendering
+However, the PageSpeed report indicates remaining issues with:
+1. **Unused JavaScript** (~216 KB wasted, 59% of main bundle unused)
+2. **Render-blocking resources** (~600ms from CSS and fonts)
+3. **Largest Contentful Paint** (~5.4s estimated savings)
 
 ---
 
 ## Optimization Strategy
 
-### Phase 1: Code Splitting and Lazy Loading (High Impact)
+### Phase 1: Eliminate Dead Code and Unused CSS
 
-**1.1 Lazy Load the LeadFunnel Modal**
-The entire funnel (7 step components + form libraries) only loads when user clicks "Get Started". This should be lazy loaded.
+**1.1 Remove Unused CSS File**
+The file `src/App.css` contains legacy Vite template styles that are not used anywhere in the application (no import found). Removing it eliminates dead code.
 
-```text
-Before: LeadFunnel imported at top of Index.tsx
-After:  const LeadFunnel = lazy(() => import("..."))
-```
+**1.2 Tree-Shake Unused Radix UI Components**
+The project installs 25+ Radix UI packages but the landing page only uses:
+- `@radix-ui/react-slider` (DebtSlider)
+- `@radix-ui/react-dialog` (potential modals)
+- `@radix-ui/react-toast` (notifications)
+- `@radix-ui/react-tooltip` (optional)
+- `@radix-ui/react-checkbox` (funnel forms)
+- `@radix-ui/react-radio-group` (funnel forms)
+- `@radix-ui/react-progress` (FunnelProgress)
+- `@radix-ui/react-label` (form labels)
+- `@radix-ui/react-slot` (Button primitive)
 
-**1.2 Route-Based Code Splitting**
-Split PrivacyPolicy and NotFound into separate chunks:
+Update the Vite chunk configuration to only include actively used Radix components.
 
-```text
-Before: import PrivacyPolicy from "./pages/PrivacyPolicy"
-After:  const PrivacyPolicy = lazy(() => import(...))
-```
+**1.3 Remove Unused Dependencies from Bundle**
+These packages are installed but not used on the landing page:
+- `recharts` - Only included if using charts (not visible on landing)
+- `react-day-picker` / `date-fns` - Calendar component not used
+- `cmdk` - Command palette not used
+- `react-resizable-panels` - Resizable panels not used
 
-**1.3 Lazy Load Below-the-Fold Sections**
-Components like Testimonials (uses embla-carousel), Services, and FinalCTA can be lazy loaded since they're below the fold.
-
-### Phase 2: Image Optimization
-
-**2.1 Convert Logo to WebP Format**
-- Create optimized WebP versions of the logo
-- Use `<picture>` element with WebP as primary and PNG as fallback
-- Expected savings: ~74KB based on earlier audits
-
-### Phase 3: Vite Build Optimization
-
-**3.1 Configure Manual Chunks**
-Split vendor libraries into separate cacheable chunks:
-
-```text
-manualChunks: {
-  'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-  'radix': ['@radix-ui/react-slider', '@radix-ui/react-dialog', ...],
-  'supabase': ['@supabase/supabase-js']
-}
-```
-
-### Phase 4: Critical CSS and Resource Hints
-
-**4.1 Preload Critical Assets**
-Add preload hints for the hero section's most important assets:
-
-```html
-<link rel="preload" as="image" href="/logo.webp" />
-```
-
-**4.2 Defer Non-Critical JavaScript**
-Ensure Google Tag Manager doesn't block the main thread (already async, but verify implementation).
+These will be tree-shaken if not imported, but verifying no accidental imports exist.
 
 ---
 
-## Implementation Details
+### Phase 2: Critical CSS Extraction
 
-### Files to Modify
+**2.1 Inline Critical Hero CSS**
+Extract and inline the critical CSS needed for above-the-fold content (Header, Hero, TrustBadges) directly in `index.html`. This eliminates the 302ms render-blocking CSS request.
+
+Key styles to inline:
+- Hero gradient background
+- Container/layout primitives
+- Typography for hero headings
+- Button styles for CTA
+- Glass card effect
+
+**2.2 Defer Non-Critical CSS**
+Load the main CSS bundle asynchronously using the same pattern as fonts:
+```html
+<link rel="preload" as="style" href="[css-bundle]">
+<link href="[css-bundle]" rel="stylesheet" media="print" onload="this.media='all'">
+```
+
+---
+
+### Phase 3: Image Optimization
+
+**3.1 Create Optimized WebP Logo**
+Convert `TrueHorizon_Original.png` to WebP format with proper transparency. This provides ~60-80% size reduction while maintaining quality.
+
+**3.2 Add Preload for LCP Image**
+The logo in the Header is likely the LCP element. Add a preload hint:
+```html
+<link rel="preload" as="image" href="/assets/logo.webp" type="image/webp">
+```
+
+---
+
+### Phase 4: Further JavaScript Optimization
+
+**4.1 Preload Critical Chunks**
+Add `modulepreload` hints for the Index page chunk to start loading immediately:
+```html
+<link rel="modulepreload" href="/assets/index-[hash].js">
+```
+
+**4.2 Optimize Lucide Icons Import**
+Currently importing from `lucide-react` brings in tree-shakeable exports, but ensure only specific icons are imported (already done correctly in the codebase).
+
+---
+
+## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/App.tsx` | Add lazy loading for routes with Suspense |
-| `src/pages/Index.tsx` | Lazy load LeadFunnel and below-fold sections |
-| `vite.config.ts` | Add build optimization with manual chunks |
-| `src/components/landing/Header.tsx` | Use WebP logo with picture fallback |
-| `src/components/landing/Footer.tsx` | Use WebP logo with picture fallback |
+| `index.html` | Add critical CSS inline, preload hints for LCP image, modulepreload for JS |
+| `vite.config.ts` | Refine manualChunks to only include used Radix packages |
+| `src/App.css` | Delete (unused legacy file) |
+| `src/components/landing/Header.tsx` | Use WebP logo with `<picture>` fallback |
+| `src/components/landing/Footer.tsx` | Use WebP logo with `<picture>` fallback |
 
-### New Files to Create
+## New Files
 
 | File | Purpose |
 |------|---------|
-| `src/assets/TrueHorizonLogo.webp` | Optimized header logo |
+| `src/assets/TrueHorizon_Original.webp` | Optimized WebP version of the logo |
 
 ---
 
 ## Expected Impact
 
-| Optimization | Est. Improvement |
-|-------------|------------------|
-| Lazy load LeadFunnel | -50-80KB initial JS |
-| Route code splitting | -10-20KB initial JS |
-| Lazy load below-fold sections | -30-50KB initial JS |
-| WebP logo conversion | -74KB transfer size |
-| Vendor chunk splitting | Better caching |
+| Optimization | Estimated Improvement |
+|-------------|----------------------|
+| Remove unused App.css | -0.5 KB, cleaner build |
+| Refine Radix chunks | Better cache efficiency |
+| Inline critical CSS | -302 ms render-blocking |
+| WebP logo conversion | -50-80% image size |
+| Preload LCP image | Faster LCP timing |
+| Modulepreload hints | Parallel JS loading |
 
-**Target**: Improve mobile performance score from 69% to 80%+
+**Target**: Improve mobile performance score from current level toward 80%+
 
 ---
 
-## Technical Implementation
+## Technical Implementation Details
 
-### 1. App.tsx - Route Code Splitting
+### Critical CSS to Inline
 
-```tsx
-import { Suspense, lazy } from "react";
-
-const Index = lazy(() => import("./pages/Index"));
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-
-// Wrap routes in Suspense with minimal fallback
-<Suspense fallback={<div className="min-h-screen" />}>
-  <Routes>...</Routes>
-</Suspense>
+```css
+/* Minimal critical styles for above-the-fold rendering */
+:root {
+  --primary: 217 91% 45%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 16 85% 55%;
+  --background: 210 33% 98%;
+  --foreground: 222 47% 15%;
+  --card: 0 0% 100%;
+  --border: 214 32% 85%;
+  --muted-foreground: 215 16% 47%;
+  --success: 142 71% 45%;
+  --hero-gradient-start: 217 91% 30%;
+  --hero-gradient-end: 217 91% 50%;
+}
+body { margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+.hero-gradient { 
+  background: linear-gradient(135deg, hsl(217 91% 30%) 0%, hsl(217 91% 50%) 100%); 
+}
+.container { max-width: 1400px; margin: 0 auto; padding: 0 2rem; }
 ```
 
-### 2. Index.tsx - Lazy Load Modal and Sections
+### Updated Vite Config
 
-```tsx
-import { lazy, Suspense } from "react";
-
-// Critical above-fold components load immediately
-import Header from "@/components/landing/Header";
-import Hero from "@/components/landing/Hero";
-import TrustBadges from "@/components/landing/TrustBadges";
-
-// Below-fold sections lazy loaded
-const DebtTypes = lazy(() => import("@/components/landing/DebtTypes"));
-const HowItWorks = lazy(() => import("@/components/landing/HowItWorks"));
-// ... etc
-
-// Modal lazy loaded (only when user clicks CTA)
-const LeadFunnel = lazy(() => import("@/components/landing/LeadFunnel"));
-```
-
-### 3. Vite Config - Build Optimization
-
-```ts
-build: {
-  rollupOptions: {
-    output: {
-      manualChunks: {
-        'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-        'ui-vendor': ['@radix-ui/react-slider', '@radix-ui/react-tooltip', ...]
-      }
-    }
-  }
+```typescript
+manualChunks: {
+  'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+  'supabase': ['@supabase/supabase-js'],
+  'query': ['@tanstack/react-query'],
+  'radix-core': [
+    '@radix-ui/react-slider',
+    '@radix-ui/react-dialog',
+    '@radix-ui/react-slot',
+    '@radix-ui/react-label',
+  ],
+  'radix-form': [
+    '@radix-ui/react-checkbox',
+    '@radix-ui/react-radio-group',
+    '@radix-ui/react-progress',
+  ],
+  'radix-feedback': [
+    '@radix-ui/react-toast',
+    '@radix-ui/react-tooltip',
+  ],
 }
 ```
 
-### 4. Logo Component with WebP
+### WebP Picture Element
 
 ```tsx
 <picture>
@@ -169,22 +193,27 @@ build: {
 
 ---
 
+## Verification Steps
+
+After implementing these changes:
+
+1. Run `npm run build` and check bundle sizes
+2. Publish the changes
+3. Re-run PageSpeed Insights on mobile
+4. Verify:
+   - Render-blocking resources reduced
+   - Unused JavaScript decreased
+   - LCP improved
+   - No visual regressions
+5. Test the lead funnel to ensure lazy loading works correctly
+
+---
+
 ## Risks and Mitigations
 
 | Risk | Mitigation |
 |------|-----------|
-| Flash of unstyled content | Use minimal skeleton/placeholder in Suspense fallback |
-| Delayed modal loading | Preload LeadFunnel on hover/focus of CTA button |
-| Browser compatibility | Picture element has excellent support, PNG fallback included |
-
----
-
-## Verification Steps
-
-After implementation:
-1. Run Lighthouse audit on mobile
-2. Verify all sections render correctly
-3. Test LeadFunnel opens without noticeable delay
-4. Confirm no visual regressions
-5. Check bundle analyzer for chunk sizes
+| Flash of unstyled content from deferred CSS | Inline sufficient critical CSS for above-the-fold |
+| Breaking changes from chunk reorganization | Test all interactive elements after build |
+| WebP browser compatibility | Use `<picture>` with PNG fallback |
 
