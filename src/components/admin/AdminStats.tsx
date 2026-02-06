@@ -4,11 +4,12 @@ interface AdminStatsProps {
   total: number;
   synced: number;
   failed: number;
+  manuallyImported: number;
 }
 
-export function AdminStats({ total, synced, failed }: AdminStatsProps) {
+export function AdminStats({ total, synced, failed, manuallyImported }: AdminStatsProps) {
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
       <Card>
         <CardContent className="pt-6 text-center">
           <p className="text-3xl font-bold text-foreground">{total}</p>
@@ -25,6 +26,12 @@ export function AdminStats({ total, synced, failed }: AdminStatsProps) {
         <CardContent className="pt-6 text-center">
           <p className="text-3xl font-bold text-destructive">{failed}</p>
           <p className="text-sm text-muted-foreground">Not Synced</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6 text-center">
+          <p className="text-3xl font-bold text-accent-foreground">{manuallyImported}</p>
+          <p className="text-sm text-muted-foreground">Manually Imported</p>
         </CardContent>
       </Card>
     </div>

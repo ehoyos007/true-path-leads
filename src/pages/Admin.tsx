@@ -107,6 +107,31 @@ export default function Admin() {
     }
   };
 
+  const handleMarkManuallyImported = useCallback(async (lead: Lead) => {
+    const text = `${lead.name}\n${lead.email}\n${lead.phone}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copied!", description: "Contact info copied to clipboard" });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not access clipboard", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-leads", {
+        method: "POST",
+        headers: { "x-admin-password": sessionPw },
+        body: { action: "mark-manually-imported", leadId: lead.id },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, manually_imported: true, manually_imported_at: new Date().toISOString() } : l));
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: "Failed to mark as imported", variant: "destructive" });
+    }
+  }, [sessionPw, toast]);
+
   const handleSaveNotes = useCallback(async (leadId: string, notes: string) => {
     try {
       const { data, error } = await supabase.functions.invoke("admin-leads", {
@@ -141,7 +166,8 @@ export default function Admin() {
         lead.phone.includes(search);
       const matchesStatus = statusFilter === "all" ||
         (statusFilter === "synced" && lead.crm_id !== null) ||
-        (statusFilter === "failed" && lead.crm_id === null);
+        (statusFilter === "failed" && lead.crm_id === null) ||
+        (statusFilter === "manually_imported" && lead.manually_imported);
       return matchesSearch && matchesStatus;
     });
 
@@ -158,6 +184,7 @@ export default function Admin() {
     total: leads.length,
     synced: leads.filter((l) => l.crm_id !== null).length,
     failed: leads.filter((l) => l.crm_id === null).length,
+    manuallyImported: leads.filter((l) => l.manually_imported).length,
   }), [leads]);
 
   const exportCsv = () => {
@@ -215,7 +242,7 @@ export default function Admin() {
           </div>
         </div>
 
-        <AdminStats total={stats.total} synced={stats.synced} failed={stats.failed} />
+        <AdminStats total={stats.total} synced={stats.synced} failed={stats.failed} manuallyImported={stats.manuallyImported} />
         <AdminFilters search={search} onSearchChange={setSearch} statusFilter={statusFilter} onStatusFilterChange={setStatusFilter} />
         <LeadsTable
           leads={filteredAndSortedLeads}
@@ -226,6 +253,7 @@ export default function Admin() {
           onSort={handleSort}
           onRetryCrm={handleRetryCrm}
           onSaveNotes={handleSaveNotes}
+          onCopyContact={handleMarkManuallyImported}
         />
       </div>
     </div>

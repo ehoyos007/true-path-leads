@@ -19,14 +19,14 @@ export function AdminFilters({ search, onSearchChange, statusFilter, onStatusFil
         className="sm:max-w-xs"
       />
       <div className="flex gap-2">
-        {(["all", "synced", "failed"] as const).map((s) => (
+        {(["all", "synced", "failed", "manually_imported"] as const).map((s) => (
           <Button
             key={s}
             variant={statusFilter === s ? "default" : "outline"}
             size="sm"
             onClick={() => onStatusFilterChange(s)}
           >
-            {s === "all" ? "All" : s === "synced" ? "Synced" : "Not Synced"}
+            {s === "all" ? "All" : s === "synced" ? "Synced" : s === "failed" ? "Not Synced" : "Manually Imported"}
           </Button>
         ))}
       </div>
