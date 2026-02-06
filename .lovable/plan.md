@@ -1,157 +1,105 @@
 
 
-# Fix PageSpeed Regression - Root Cause and Recovery Plan
+# Admin Dashboard + CRM Fix Plan
 
-## What Went Wrong
+## Two Problems to Solve
 
-The PageSpeed score improved in some areas but **LCP got significantly worse** due to one critical mistake:
+### Problem 1: CRM Sync is Broken
+Every lead in the database has `crm_id: null` -- the CRM API is never receiving data. The root cause: `supabase/config.toml` is missing the edge function configuration. Without `verify_jwt = false`, the function rejects all unauthenticated requests (form submissions) before the code even runs.
 
-### The Problem: Bloated WebP Image (1,004 KiB!)
+The lead data IS being saved to the database (the edge function inserts it before calling the CRM), which means the function is executing. However, looking more closely, the fact that there are **zero edge function logs** suggests the function calls may be failing silently at the client level, and the leads are actually being inserted via a different path -- or the logging system isn't capturing them. Either way, the `config.toml` fix is essential.
 
-The AI-generated WebP file `TrueHorizon_Original.webp` is **over 1 MB** - this is catastrophically large for a logo that displays at only 179x70 pixels. This single image accounts for:
-
-- **70% of total page weight** (1,004 KiB out of 1,432 KiB)
-- **LCP increased to 7.3 seconds** (the image is the LCP element)
-- **Element render delay: 2,300ms** just waiting for this image
-
-The original PNG file was likely ~74 KB (based on earlier audit), so the WebP conversion made it **14x larger** instead of smaller.
+### Problem 2: Admin Dashboard Needed
+You need a simple, password-protected page for agents to view and manage leads without affecting PageSpeed scores.
 
 ---
 
-## Current vs Previous Metrics
+## Implementation Plan
 
-| Metric | Before Changes | After Changes | Change |
-|--------|---------------|---------------|--------|
-| Performance Score | Unknown | 67 | - |
-| LCP | ~5.4s | 7.3s | Worse |
-| FCP | - | 2.1s | - |
-| CLS | - | 0 | Good |
-| TBT | - | 80ms | Good |
+### Step 1: Fix the CRM Sync (config.toml)
 
----
+Update `supabase/config.toml` to register the edge function with JWT verification disabled (since form submissions are unauthenticated):
 
-## Recovery Plan
+```toml
+project_id = "jxbjunvyoynbcenbmslo"
 
-### Phase 1: Remove Bloated WebP Files (Immediate Fix)
-
-**1.1 Delete the problematic WebP files**
-
-Remove the AI-generated WebP files that are larger than the originals:
-- `src/assets/TrueHorizon_Original.webp` (1 MB - delete)
-- `src/assets/TrueHorizonLogoLight.webp` (unknown size - delete)
-
-**1.2 Revert Header.tsx to use PNG only**
-
-```tsx
-// Before (broken)
-import logoPng from "@/assets/TrueHorizon_Original.png";
-import logoWebp from "@/assets/TrueHorizon_Original.webp";
-...
-<picture>
-  <source srcSet={logoWebp} type="image/webp" />
-  <img src={logoPng} ... />
-</picture>
-
-// After (fixed)
-import logoPng from "@/assets/TrueHorizon_Original.png";
-...
-<img src={logoPng} ... />
+[functions.sync-to-crm]
+verify_jwt = false
 ```
 
-**1.3 Revert Footer.tsx to use PNG only**
+This single change should fix the CRM sync for all future submissions.
 
-Same pattern - remove WebP import and `<picture>` element, use direct `<img>` with PNG.
+### Step 2: Create an Edge Function for Admin Access
 
----
+Create a new edge function `admin-leads` that:
+- Accepts a static password in the request header
+- The password will be stored as a secret (`ADMIN_PASSWORD`) -- never hardcoded
+- Fetches all leads from the database using the service role key
+- Supports marking leads as "exported to CRM"
+- Supports manually re-triggering CRM sync for failed leads
 
-### Phase 2: Properly Size the Logo Image
+Endpoints:
+- `GET` with password header -- returns all leads
+- `POST` with `action: "retry-crm"` -- re-sends a specific lead to the CRM API
+- `POST` with `action: "mark-exported"` -- updates a lead's status
 
-The PageSpeed report shows:
-- **Current image dimensions**: 1632x640 pixels
-- **Displayed dimensions**: 179x70 pixels  
-- **Estimated savings**: 991.4 KiB
+### Step 3: Create the Admin Page (`/admin`)
 
-The logo image is 9x larger than needed. The fix is to create a properly sized version.
+A lazy-loaded page at `/admin` that:
+- Shows a password prompt (stored in session only, never localStorage)
+- Once authenticated, displays a table of all leads
+- Columns: Date, Name, Email, Phone, Debt Amount, Debt Types, CRM Status, Actions
+- CRM Status shows: synced (has `crm_id`), failed (no `crm_id`), or pending
+- "Retry CRM Sync" button for failed leads
+- "Export CSV" button for downloading leads
+- Search/filter by name, email, date range
+- Color coding: green for synced, red for failed
 
-**2.1 Create a resized logo (manual step required)**
+PageSpeed protection:
+- The page is lazy-loaded (code-split), so none of its code is included in the main bundle
+- No link to `/admin` from any public page (agents access it by typing the URL directly)
+- The admin route uses `React.lazy()` just like other routes
+- No additional CSS or assets loaded on the landing page
 
-The user should resize `TrueHorizon_Original.png` to approximately:
-- Width: 360px (2x display size for retina)
-- Height: auto (maintain aspect ratio)
-- Format: PNG with transparency (or properly compressed WebP)
+### Step 4: Add the ADMIN_PASSWORD Secret
 
-This alone should reduce the image from ~74 KB to ~5-10 KB.
-
-**2.2 Alternative: Use CSS to constrain and add responsive images**
-
-If the user cannot resize the image, we can use `srcset` with the original image but add proper sizing hints:
-
-```tsx
-<img 
-  src={logoPng} 
-  alt="True Horizon Financial" 
-  className="h-10 md:h-12 w-auto"
-  width={111}
-  height={40}
-  fetchPriority="high"
-  decoding="async"
-/>
-```
+You will be prompted to set a password that your agents will use to access the admin panel.
 
 ---
 
-### Phase 3: Retain Good Optimizations
+## Files to Create
 
-The following changes from the previous plan were beneficial and should be kept:
-
-1. Vite chunk splitting (radix-core, radix-form, radix-feedback) - improves caching
-2. Deferred Google Tag Manager (2s after load)
-3. Inlined critical font-face CSS
-4. Deleted unused `src/App.css`
-
----
+| File | Purpose |
+|------|---------|
+| `src/pages/Admin.tsx` | Admin dashboard page with password gate, leads table, filters, CSV export |
+| `supabase/functions/admin-leads/index.ts` | Backend function for secure lead retrieval and CRM retry |
 
 ## Files to Modify
 
-| File | Action |
-|------|--------|
-| `src/assets/TrueHorizon_Original.webp` | Delete |
-| `src/assets/TrueHorizonLogoLight.webp` | Delete |
-| `src/components/landing/Header.tsx` | Remove WebP, use PNG only |
-| `src/components/landing/Footer.tsx` | Remove WebP, use PNG only |
+| File | Changes |
+|------|---------|
+| `supabase/config.toml` | Add `sync-to-crm` and `admin-leads` function configs |
+| `src/App.tsx` | Add lazy-loaded `/admin` route |
 
 ---
 
-## Expected Impact After Fix
+## Security Approach
 
-| Metric | Current | Expected After Fix |
-|--------|---------|-------------------|
-| Total Page Weight | 1,432 KiB | ~400 KiB |
-| Logo Image Size | 1,004 KiB | ~74 KiB (original) |
-| LCP | 7.3s | ~3-4s |
-| Performance Score | 67 | 75-85+ |
-
----
-
-## Future Recommendation (Manual Step)
-
-For the best performance, the user should:
-
-1. Use a tool like [Squoosh.app](https://squoosh.app) to:
-   - Resize the logo to 360x~130px (2x retina)
-   - Export as WebP with quality 80-85%
-   - This should result in a ~5-15 KB file
-
-2. Replace the original PNG with the optimized version
-3. Re-implement the WebP with `<picture>` element
+- Static password verified server-side in the edge function (not client-side)
+- Password stored as a backend secret, never in code
+- Session-only storage (cleared when browser tab closes)
+- No link to admin page from public site (no SEO or PageSpeed impact)
+- Service role key used only in edge functions, never exposed to client
+- Rate limiting on password attempts to prevent brute force
 
 ---
 
-## Risks and Mitigations
+## Admin Dashboard Features
 
-| Risk | Mitigation |
-|------|-----------|
-| Removing WebP loses potential optimization | Using original PNG is still far better than 1MB WebP |
-| Original PNG still larger than ideal | Works now, can optimize later with manual resize |
-| Visual regression | Using same PNG as before the broken changes |
+1. **Leads Table**: Sortable columns for all lead fields
+2. **CRM Status Indicator**: Visual badge showing synced/failed/new
+3. **Retry CRM Sync**: Button to re-push failed leads to the CRM
+4. **CSV Export**: Download filtered leads as a spreadsheet
+5. **Search and Filter**: By name, email, status, date range
+6. **Lead Count Summary**: Total leads, synced count, failed count
 
