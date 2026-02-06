@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronsUpDown, ClipboardCopy, CheckCircle2 } from "lucide-react";
 import { LeadDetailRow } from "./LeadDetailRow";
 import { formatPhone, formatDate, formatCurrency } from "./utils";
 import type { Lead, SortField, SortDir } from "./types";
@@ -19,6 +19,7 @@ interface LeadsTableProps {
   onSort: (field: SortField) => void;
   onRetryCrm: (leadId: string) => void;
   onSaveNotes: (leadId: string, notes: string) => Promise<void>;
+  onCopyContact: (lead: Lead) => void;
 }
 
 function SortIcon({ field, activeField, dir }: { field: SortField; activeField: SortField; dir: SortDir }) {
@@ -28,7 +29,7 @@ function SortIcon({ field, activeField, dir }: { field: SortField; activeField: 
     : <ChevronDown className="inline h-3.5 w-3.5 ml-1" />;
 }
 
-export function LeadsTable({ leads, loading, retrying, sortField, sortDir, onSort, onRetryCrm, onSaveNotes }: LeadsTableProps) {
+export function LeadsTable({ leads, loading, retrying, sortField, sortDir, onSort, onRetryCrm, onSaveNotes, onCopyContact }: LeadsTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
@@ -50,13 +51,14 @@ export function LeadsTable({ leads, loading, retrying, sortField, sortDir, onSor
               </TableHead>
               <TableHead>Types</TableHead>
               <TableHead>CRM</TableHead>
+              <TableHead>Import</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   {loading ? "Loading..." : "No leads found"}
                 </TableCell>
               </TableRow>
@@ -93,16 +95,39 @@ export function LeadsTable({ leads, loading, retrying, sortField, sortDir, onSor
                       )}
                     </TableCell>
                     <TableCell>
-                      {!lead.crm_id && (
+                      {lead.manually_imported ? (
+                        <div className="flex items-center gap-1">
+                          <CheckCircle2 className="h-4 w-4 text-primary" />
+                          <span className="text-xs text-primary">
+                            {lead.manually_imported_at ? formatDate(lead.manually_imported_at) : "Copied"}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
                         <Button
                           size="sm"
-                          variant="outline"
-                          disabled={retrying === lead.id}
-                          onClick={(e) => { e.stopPropagation(); onRetryCrm(lead.id); }}
+                          variant={lead.manually_imported ? "ghost" : "outline"}
+                          onClick={(e) => { e.stopPropagation(); onCopyContact(lead); }}
+                          title="Copy Name, Email, Phone to clipboard"
                         >
-                          {retrying === lead.id ? "Syncing..." : "Retry"}
+                          <ClipboardCopy className="h-3.5 w-3.5 mr-1" />
+                          {lead.manually_imported ? "Re-copy" : "Copy"}
                         </Button>
-                      )}
+                        {!lead.crm_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={retrying === lead.id}
+                            onClick={(e) => { e.stopPropagation(); onRetryCrm(lead.id); }}
+                          >
+                            {retrying === lead.id ? "Syncing..." : "Retry"}
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                   {expandedId === lead.id && (

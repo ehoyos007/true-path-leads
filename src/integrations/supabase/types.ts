@@ -25,6 +25,8 @@ export type Database = {
           email: string
           employment_status: string | null
           id: string
+          manually_imported: boolean
+          manually_imported_at: string | null
           name: string
           notes: string | null
           phone: string
@@ -43,6 +45,8 @@ export type Database = {
           email: string
           employment_status?: string | null
           id?: string
+          manually_imported?: boolean
+          manually_imported_at?: string | null
           name: string
           notes?: string | null
           phone: string
@@ -61,6 +65,8 @@ export type Database = {
           email?: string
           employment_status?: string | null
           id?: string
+          manually_imported?: boolean
+          manually_imported_at?: string | null
           name?: string
           notes?: string | null
           phone?: string

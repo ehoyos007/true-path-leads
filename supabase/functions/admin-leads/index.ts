@@ -177,6 +177,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true });
     }
 
+    if (action === "mark-manually-imported") {
+      if (!leadId) return jsonResponse({ error: "leadId required" }, 400);
+
+      const { error: updateErr } = await supabase
+        .from("leads")
+        .update({ manually_imported: true, manually_imported_at: new Date().toISOString() })
+        .eq("id", leadId);
+
+      if (updateErr) {
+        console.error("Error marking manually imported:", updateErr.message);
+        return jsonResponse({ error: "Failed to mark as imported" }, 500);
+      }
+
+      console.log("Lead", leadId, "marked as manually imported");
+      return jsonResponse({ success: true });
+    }
+
     return jsonResponse({ error: "Unknown action" }, 400);
   }
 

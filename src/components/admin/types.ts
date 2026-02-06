@@ -15,8 +15,10 @@ export interface Lead {
   created_at: string;
   updated_at: string;
   notes: string | null;
+  manually_imported: boolean;
+  manually_imported_at: string | null;
 }
 
 export type SortField = "created_at" | "name" | "debt_amount";
 export type SortDir = "asc" | "desc";
-export type StatusFilter = "all" | "synced" | "failed";
+export type StatusFilter = "all" | "synced" | "failed" | "manually_imported";
