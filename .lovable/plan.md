@@ -1,40 +1,75 @@
 
 
-# 5 Admin Dashboard Improvements
+# Manual CRM Import Tracking via Copy-to-Clipboard
 
-Based on the screenshot, here are five targeted improvements:
+## What This Does
 
-## 1. Expandable Row Details
+Adds a "Copy Contact" button to each lead row that copies the Name, Email, and Phone to the clipboard in one click. Once all three fields are copied, the lead is marked as "Manually Imported" with a visual indicator and a timestamp. This lets agents track which leads they have already handled outside of the automatic CRM sync.
 
-Currently the "Types" column is truncated ("Credit Cards, P..."). Add an expandable row or a click-to-view detail panel that shows all lead fields including employment status, payment status, timeline goal, SMS opt-in, and notes -- without cluttering the table.
+## How It Works
 
-## 2. "Retry All" Bulk Action
+1. Agent clicks a "Copy" button on a lead row
+2. Name, Email, and Phone are copied to clipboard as formatted text
+3. The lead is flagged as `manually_imported = true` with a `manually_imported_at` timestamp in the database
+4. A clipboard/checkmark icon and "Copied" badge appear on that row going forward
+5. The stats bar and filters are updated to include a "Manually Imported" count and filter option
 
-With 13/13 leads not synced, clicking "Retry" one-by-one is tedious. Add a "Retry All Failed" button in the header area that batch-processes all unsynced leads, with a progress indicator showing how many succeeded/failed.
+## Changes Required
 
-## 3. CRM Error Details on Failed Sync
+### Database Migration
+Add two columns to the `leads` table:
+- `manually_imported` (boolean, default false) -- whether contact info was copied
+- `manually_imported_at` (timestamptz, nullable) -- when it was copied
 
-The toast at the bottom shows "CRM Sync Failed - Duplicate lead" but disappears quickly. Display the last sync error persistently in the table row itself (e.g., a small red text under the "Not Synced" badge saying "Duplicate lead") so agents can see why each lead failed without retrying.
+### Backend: `supabase/functions/admin-leads/index.ts`
+Add a new action `mark-manually-imported` that sets both fields on a given lead.
 
-## 4. Sortable Columns
+### Frontend Changes
 
-Add click-to-sort on Date, Name, and Debt Amount columns. Date should default to newest-first (already is), but agents should be able to sort by debt amount to prioritize high-value leads or sort alphabetically by name.
+**`src/components/admin/types.ts`**
+- Add `manually_imported` and `manually_imported_at` fields to the `Lead` interface
+- Add `"manually_imported"` to the `StatusFilter` union type
 
-## 5. Lead Notes / Status Field
+**`src/components/admin/LeadsTable.tsx`**
+- Add a "Copy" button in the Actions column that copies Name, Email, Phone to clipboard and calls the backend to mark the lead
+- Show a checkmark icon or "Copied" badge on leads already marked
 
-Add an inline editable "Notes" column or a slide-out panel where agents can add notes to individual leads (e.g., "Called back", "Wrong number", "Scheduled follow-up"). This would persist via the existing `notes` field in the database and help agents coordinate without external tools.
+**`src/components/admin/AdminStats.tsx`**
+- Add a 4th stat card showing count of manually imported leads
 
----
+**`src/components/admin/AdminFilters.tsx`**
+- Add a "Manually Imported" filter button
 
-## Technical Summary
+**`src/pages/Admin.tsx`**
+- Add `handleMarkManuallyImported` function
+- Update stats calculation to include manually imported count
+- Update filter logic to handle the new filter value
 
-| Improvement | Files Modified |
-|---|---|
-| Expandable row details | `src/pages/Admin.tsx` |
-| Retry All bulk action | `src/pages/Admin.tsx`, `supabase/functions/admin-leads/index.ts` |
-| Persistent CRM error display | `src/pages/Admin.tsx`, DB migration (add `crm_error` column to leads) |
-| Sortable columns | `src/pages/Admin.tsx` |
-| Lead notes editing | `src/pages/Admin.tsx`, `supabase/functions/admin-leads/index.ts` |
+## Clipboard Format
 
-All changes stay within the lazy-loaded Admin page, so zero PageSpeed impact on the public site.
+When copied, the text will look like:
+```
+John Smith
+john@email.com
+5551234567
+```
 
+This makes it easy to paste into any external CRM or spreadsheet.
+
+## Visual Indicators
+
+- Leads NOT yet copied: show a clipboard icon button labeled "Copy Contact"
+- Leads already copied: show a green checkmark badge with "Copied" and the date/time
+- The copy button remains available to re-copy, but the visual stays green
+
+## Technical Details
+
+| File | Change |
+|------|--------|
+| DB migration | Add `manually_imported` (bool) and `manually_imported_at` (timestamptz) columns |
+| `supabase/functions/admin-leads/index.ts` | Add `mark-manually-imported` action handler |
+| `src/components/admin/types.ts` | Extend `Lead` interface and `StatusFilter` type |
+| `src/components/admin/LeadsTable.tsx` | Add copy button, visual indicator, pass handler |
+| `src/components/admin/AdminStats.tsx` | Add 4th "Manually Imported" stat card |
+| `src/components/admin/AdminFilters.tsx` | Add "Manually Imported" filter button |
+| `src/pages/Admin.tsx` | Add handler, update stats/filter logic |
