@@ -1,1 +1,7 @@
 project_id = "jxbjunvyoynbcenbmslo"
+
+[functions.sync-to-crm]
+verify_jwt = false
+
+[functions.admin-leads]
+verify_jwt = false
