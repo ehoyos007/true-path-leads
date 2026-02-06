@@ -65,15 +65,16 @@ async function syncLeadToCrm(supabase: any, lead: any) {
       return { success: false, leadId: lead.id, error: errorMsg };
     }
 
-    if (crmData.Data?.PrimeCrmId) {
+    const crmId = crmData.Data?.PrimeCrmId ?? crmData.Data?.ZenithCrmId;
+    if (crmId) {
       await supabase
         .from("leads")
-        .update({ crm_id: crmData.Data.PrimeCrmId, crm_error: null })
+        .update({ crm_id: crmId, crm_error: null })
         .eq("id", lead.id);
-      console.log("Lead", lead.id, "synced with CRM ID:", crmData.Data.PrimeCrmId);
+      console.log("Lead", lead.id, "synced with CRM ID:", crmId);
     }
 
-    return { success: true, leadId: lead.id, crmId: crmData.Data?.PrimeCrmId };
+    return { success: true, leadId: lead.id, crmId };
   } catch (err) {
     const errorMsg = "CRM API unreachable";
     console.error("CRM fetch error for lead", lead.id, ":", err);
