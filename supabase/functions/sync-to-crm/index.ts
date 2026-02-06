@@ -9,11 +9,20 @@ const ALLOWED_ORIGINS = [
   "http://localhost:8080",
 ];
 
+function isAllowedOrigin(origin: string): boolean {
+  // Check exact matches
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow any *.lovableproject.com or *.lovable.app subdomain
+  if (/^https:\/\/.*\.lovableproject\.com$/.test(origin)) return true;
+  if (/^https:\/\/.*\.lovable\.app$/.test(origin)) return true;
+  return false;
+}
+
 function getCorsHeaders(origin: string | null): Record<string, string> {
-  const isAllowed = origin && ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed.replace(/\/$/, '')));
+  const allowed = origin && isAllowedOrigin(origin);
   
   return {
-    "Access-Control-Allow-Origin": isAllowed && origin ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Origin": allowed && origin ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
@@ -81,8 +90,14 @@ interface LeadSubmission {
   smsOptIn?: boolean;
 }
 
+interface CrmResponseData {
+  PrimeCrmId?: number;
+  ZenithCrmId?: number;
+  [key: string]: unknown;
+}
+
 interface CrmResponse {
-  Data: { PrimeCrmId: number } | null;
+  Data: CrmResponseData | null;
   Message: string;
   Errors: string[];
 }
@@ -251,11 +266,17 @@ Deno.serve(async (req) => {
     });
 
     const crmData: CrmResponse = await crmResponse.json();
-    console.log("CRM API response status:", crmResponse.status, "Message:", crmData.Message);
+    console.log("CRM API response status:", crmResponse.status);
+    console.log("CRM API full response:", JSON.stringify(crmData));
 
     if (!crmResponse.ok || crmData.Errors?.length > 0) {
-      console.error("CRM API returned errors:", crmData.Errors);
-      // Lead is already saved locally, just note CRM sync failed
+      const errorMsg = crmData.Errors?.join(", ") || "Unknown CRM error";
+      console.error("CRM API returned errors:", errorMsg);
+      // Store the error on the lead
+      await supabase
+        .from("leads")
+        .update({ crm_error: errorMsg })
+        .eq("id", insertedLead.id);
       return new Response(
         JSON.stringify({ success: true, leadId: insertedLead.id, crmSynced: false }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -263,17 +284,23 @@ Deno.serve(async (req) => {
     }
 
     // Step 5: Update lead with CRM ID if successful
-    if (crmData.Data?.PrimeCrmId) {
+    // Try multiple response shapes for safety
+    const crmId = crmData.Data?.PrimeCrmId ?? crmData.Data?.ZenithCrmId ?? (crmData as any).PrimeCrmId ?? (crmData as any).ZenithCrmId;
+    console.log("Extracted crmId:", crmId, "from Data:", JSON.stringify(crmData.Data));
+    
+    if (crmId) {
       const { error: updateError } = await supabase
         .from("leads")
-        .update({ crm_id: crmData.Data.PrimeCrmId })
+        .update({ crm_id: crmId })
         .eq("id", insertedLead.id);
 
       if (updateError) {
         console.error("Failed to update lead with CRM ID:", updateError.message);
       } else {
-        console.log("Updated lead with CRM ID:", crmData.Data.PrimeCrmId);
+        console.log("Updated lead with CRM ID:", crmId);
       }
+    } else {
+      console.warn("CRM response successful but no PrimeCrmId found in response");
     }
 
     return new Response(
