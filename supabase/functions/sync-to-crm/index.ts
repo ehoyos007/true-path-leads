@@ -161,7 +161,7 @@ interface N8nPayload {
   crmSynced: boolean;
 }
 
-function fireN8nWebhook(payload: N8nPayload): void {
+async function fireN8nWebhook(payload: N8nPayload): Promise<void> {
   const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
   if (!webhookUrl) {
     console.warn("N8N_WEBHOOK_URL not configured, skipping webhook");
@@ -183,14 +183,17 @@ function fireN8nWebhook(payload: N8nPayload): void {
     crm_synced: payload.crmSynced,
   };
 
-  // Fire and forget — don't await
-  fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-    .then((res) => console.log("n8n webhook response:", res.status))
-    .catch((err) => console.error("n8n webhook error:", err instanceof Error ? err.message : err));
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    console.log("n8n webhook response:", res.status);
+    await res.text(); // consume body
+  } catch (err) {
+    console.error("n8n webhook error:", err instanceof Error ? err.message : err);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -324,7 +327,7 @@ Deno.serve(async (req) => {
         .update({ crm_error: errorMsg })
         .eq("id", insertedLead.id);
       // Still fire webhook even if CRM failed
-      fireN8nWebhook({
+      await fireN8nWebhook({
         leadId: insertedLead.id,
         name: sanitizedName,
         email: sanitizedEmail,
@@ -365,7 +368,7 @@ Deno.serve(async (req) => {
 
     // Step 6: Fire n8n webhook (non-blocking, fire-and-forget)
     const crmSynced = true;
-    fireN8nWebhook({
+    await fireN8nWebhook({
       leadId: insertedLead.id,
       name: sanitizedName,
       email: sanitizedEmail,
