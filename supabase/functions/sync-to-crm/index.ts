@@ -147,6 +147,52 @@ function validateRequest(body: LeadSubmission): { valid: boolean; error: string 
   return { valid: true, error: "" };
 }
 
+interface N8nPayload {
+  leadId: string;
+  name: string;
+  email: string;
+  phone: string;
+  debtAmount: number;
+  debtTypes: string[];
+  employmentStatus: string;
+  behindOnPayments: string;
+  timelineGoal: string;
+  smsOptIn: boolean;
+  crmSynced: boolean;
+}
+
+function fireN8nWebhook(payload: N8nPayload): void {
+  const webhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+  if (!webhookUrl) {
+    console.warn("N8N_WEBHOOK_URL not configured, skipping webhook");
+    return;
+  }
+
+  const body = {
+    timestamp: new Date().toISOString(),
+    lead_id: payload.leadId,
+    name: payload.name,
+    email: payload.email,
+    phone: payload.phone,
+    debt_amount: payload.debtAmount,
+    debt_types: payload.debtTypes,
+    employment_status: payload.employmentStatus,
+    behind_on_payments: payload.behindOnPayments,
+    timeline_goal: payload.timelineGoal,
+    sms_opt_in: payload.smsOptIn,
+    crm_synced: payload.crmSynced,
+  };
+
+  // Fire and forget — don't await
+  fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+    .then((res) => console.log("n8n webhook response:", res.status))
+    .catch((err) => console.error("n8n webhook error:", err instanceof Error ? err.message : err));
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
@@ -277,6 +323,20 @@ Deno.serve(async (req) => {
         .from("leads")
         .update({ crm_error: errorMsg })
         .eq("id", insertedLead.id);
+      // Still fire webhook even if CRM failed
+      fireN8nWebhook({
+        leadId: insertedLead.id,
+        name: sanitizedName,
+        email: sanitizedEmail,
+        phone: sanitizedPhone,
+        debtAmount: sanitizedDebtAmount,
+        debtTypes: sanitizedDebtTypes,
+        employmentStatus: sanitizedEmployment,
+        behindOnPayments: sanitizedPayments,
+        timelineGoal: sanitizedTimeline,
+        smsOptIn: body.smsOptIn === true,
+        crmSynced: false,
+      });
       return new Response(
         JSON.stringify({ success: true, leadId: insertedLead.id, crmSynced: false }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -303,8 +363,24 @@ Deno.serve(async (req) => {
       console.warn("CRM response successful but no PrimeCrmId found in response");
     }
 
+    // Step 6: Fire n8n webhook (non-blocking, fire-and-forget)
+    const crmSynced = true;
+    fireN8nWebhook({
+      leadId: insertedLead.id,
+      name: sanitizedName,
+      email: sanitizedEmail,
+      phone: sanitizedPhone,
+      debtAmount: sanitizedDebtAmount,
+      debtTypes: sanitizedDebtTypes,
+      employmentStatus: sanitizedEmployment,
+      behindOnPayments: sanitizedPayments,
+      timelineGoal: sanitizedTimeline,
+      smsOptIn: body.smsOptIn === true,
+      crmSynced,
+    });
+
     return new Response(
-      JSON.stringify({ success: true, leadId: insertedLead.id, crmSynced: true }),
+      JSON.stringify({ success: true, leadId: insertedLead.id, crmSynced }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
