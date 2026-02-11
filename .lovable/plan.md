@@ -1,87 +1,46 @@
 
 
-# n8n Webhook Integration for Lead Submissions
+# Terms and Conditions Page
 
 ## Overview
 
-Add an n8n webhook call to the existing `sync-to-crm` backend function so that every time a lead form is submitted, n8n receives a payload with lead details. This enables you to build automations in n8n (e.g., SMS notifications to agents, Slack alerts, follow-up sequences).
+Create a new `/terms` page for True Horizon Financial LLC that matches the style and layout of the existing Privacy Policy page. The page will be linked from the footer (which already has a "Terms of Service" link pointing to `/terms`).
 
-## Recommended Webhook Payload
+## What the Page Will Include
 
-Beyond the fields you requested (timestamp, name, email, phone), here are additional fields I recommend including to give your agents maximum context when reaching out via SMS:
+1. **Introduction** -- Defines the agreement, the company (True Horizon Financial LLC, Miami, FL), and that using the site constitutes acceptance of terms.
 
-| Field | Why Include It |
-|---|---|
-| `timestamp` | When the lead came in -- urgency/speed-to-lead |
-| `name` | Who to address |
-| `email` | Alternate contact method |
-| `phone` | Primary contact for SMS |
-| `debt_amount` | Lets agents tailor the conversation to the lead's situation |
-| `debt_types` | "Credit Cards, Medical Bills" -- agents know what to discuss |
-| `employment_status` | Qualification signal (employed vs. unemployed) |
-| `behind_on_payments` | Urgency indicator -- behind leads need faster outreach |
-| `timeline_goal` | What the lead wants (e.g., "debt-free in 2 years") |
-| `sms_opt_in` | Compliance -- agents must confirm consent before texting |
-| `lead_id` | Internal reference ID for CRM cross-referencing |
-| `crm_synced` | Whether the CRM sync succeeded (agents know if CRM has the lead) |
+2. **Eligibility** -- Users must be 18 years or older to use the service.
 
-## Implementation Steps
+3. **Description of Services** -- Consultative/referral service only. Explicitly states the company is NOT a lender, broker, debt settlement company, law firm, or credit repair organization. Matches the disclaimer language already used on the site.
 
-### Step 1: Store the n8n Webhook URL as a Secret
+4. **No Guarantees Disclaimer** -- Results such as debt reduction, savings, or approval are not guaranteed. Outcomes depend on individual circumstances, creditor participation, and third-party providers.
 
-You will need to provide your n8n webhook URL (e.g., `https://your-instance.app.n8n.cloud/webhook/abc123`). This will be stored securely as `N8N_WEBHOOK_URL` so it is never exposed in client-side code.
+5. **TCPA / SMS Consent Disclosure** -- By submitting the form and opting in to SMS, users consent to receive calls and text messages from True Horizon Financial LLC at the phone number provided. Includes standard TCPA language: message frequency varies, message and data rates may apply, reply STOP to opt out.
 
-### Step 2: Update the `sync-to-crm` Backend Function
+6. **User Responsibilities** -- Users agree to provide accurate information and understand data will be shared with third-party service providers.
 
-After the lead is saved to the database and the CRM sync completes, add a new step that fires a POST request to the n8n webhook:
+7. **Third-Party Services** -- The company refers users to independent licensed providers and is not responsible for their services, terms, or outcomes.
 
-- The webhook call will be non-blocking ("fire and forget") so it does not slow down the form submission or cause failures if n8n is unreachable.
-- Errors from the webhook call will be logged but will NOT fail the lead submission.
-- The payload will use the sanitized data already prepared in the function.
+8. **Limitation of Liability** -- Standard limitation of liability clause.
 
-The webhook call will be placed after both the database insert and CRM sync, so the payload can include `crm_synced` status.
+9. **Arbitration Clause** -- All disputes will be resolved through binding individual arbitration rather than in court. Users waive the right to participate in class actions.
 
-### Step 3: Set Up the n8n Workflow
+10. **Changes to Terms** -- The company reserves the right to modify the terms at any time.
 
-On the n8n side (you do this in your n8n dashboard):
+11. **Contact Information** -- Same contact details as the Privacy Policy (notifications@thfinancial.org, Miami, FL).
 
-1. Create a new workflow
-2. Add a **Webhook** trigger node (choose "POST" method)
-3. Copy the webhook URL it generates
-4. Provide that URL to Lovable so it can be stored as a secret
-5. Add downstream nodes (e.g., an SMS node to text agents with lead details)
-6. Activate the workflow
+## Technical Implementation
 
-### What Will NOT Change
+### New file: `src/pages/TermsOfService.tsx`
+- Follows the exact same layout pattern as `src/pages/PrivacyPolicy.tsx` (Header, main content, Footer)
+- Same styling: container, max-w-4xl, section headings, spaced paragraphs
+- Effective date: February 11, 2026
 
-- The lead form UI stays the same
-- The database insert logic stays the same
-- The CRM sync logic stays the same
-- If the n8n webhook fails, leads still save and sync to CRM normally
+### Updated file: `src/App.tsx`
+- Add a lazy-loaded route for `/terms` pointing to the new `TermsOfService` page
 
-## Technical Details
-
-The webhook POST request added to the backend function will look like:
-
-```text
-POST {N8N_WEBHOOK_URL}
-Content-Type: application/json
-
-{
-  "timestamp": "2026-02-11T15:30:00.000Z",
-  "lead_id": "uuid-here",
-  "name": "John Smith",
-  "email": "john@email.com",
-  "phone": "5551234567",
-  "debt_amount": 25000,
-  "debt_types": ["Credit Cards", "Medical Bills"],
-  "employment_status": "Full-Time",
-  "behind_on_payments": "Yes",
-  "timeline_goal": "Debt-free in 2 years",
-  "sms_opt_in": true,
-  "crm_synced": true
-}
-```
-
-The call will be wrapped in a try/catch so failures are logged but never block the response to the user.
+### No other changes needed
+- The Footer already has a link to `/terms` -- it will start working automatically once the route exists
+- No form changes since you chose "just link in footer"
 
