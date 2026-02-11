@@ -1,12 +1,9 @@
-import { CreditCard, Building2, Stethoscope, Briefcase, Landmark, Receipt } from "lucide-react";
+import { CreditCard, Stethoscope, Building2 } from "lucide-react";
 
 const debtTypes = [
   { icon: CreditCard, label: "Credit Cards", description: "High-interest credit card debt" },
-  { icon: Receipt, label: "Collections", description: "Accounts in collections" },
-  { icon: Building2, label: "Personal Loans", description: "Unsecured personal loans" },
   { icon: Stethoscope, label: "Medical Bills", description: "Outstanding medical debt" },
-  { icon: Landmark, label: "Lines of Credit", description: "Home equity and credit lines" },
-  { icon: Briefcase, label: "Business Loans", description: "Small business debt" },
+  { icon: Building2, label: "Unsecured Loans", description: "Unsecured personal loans" },
 ];
 
 const DebtTypes = () => {
