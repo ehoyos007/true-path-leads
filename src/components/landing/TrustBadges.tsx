@@ -1,7 +1,6 @@
-import { Shield, Lock, Award, BadgeCheck } from "lucide-react";
+import { Lock, Award, BadgeCheck } from "lucide-react";
 
 const badges = [
-  { icon: Shield, label: "Bank-Level Security", description: "256-bit SSL encryption" },
   { icon: Lock, label: "Privacy Protected", description: "Your data is never sold" },
   { icon: Award, label: "BBB Accredited", description: "A+ Rating since 2015" },
   { icon: BadgeCheck, label: "IAPDA Certified", description: "Industry certified" },
