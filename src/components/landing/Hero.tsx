@@ -82,17 +82,6 @@ const Hero = ({ onGetStarted, debtAmount, setDebtAmount }: HeroProps) => {
           </div>
         </div>
 
-        {/* Media logos placeholder */}
-        <div className="mt-16 pt-8 border-t border-primary-foreground/20">
-          <p className="text-center text-primary-foreground/60 text-sm mb-6">As Seen In</p>
-          <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12 opacity-60">
-            {["Forbes", "CNN", "USA Today", "Bloomberg", "CNBC"].map((media) => (
-              <div key={media} className="text-primary-foreground/80 font-bold text-lg md:text-xl">
-                {media}
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );
