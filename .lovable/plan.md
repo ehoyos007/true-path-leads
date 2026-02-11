@@ -1,75 +1,87 @@
 
 
-# Manual CRM Import Tracking via Copy-to-Clipboard
+# n8n Webhook Integration for Lead Submissions
 
-## What This Does
+## Overview
 
-Adds a "Copy Contact" button to each lead row that copies the Name, Email, and Phone to the clipboard in one click. Once all three fields are copied, the lead is marked as "Manually Imported" with a visual indicator and a timestamp. This lets agents track which leads they have already handled outside of the automatic CRM sync.
+Add an n8n webhook call to the existing `sync-to-crm` backend function so that every time a lead form is submitted, n8n receives a payload with lead details. This enables you to build automations in n8n (e.g., SMS notifications to agents, Slack alerts, follow-up sequences).
 
-## How It Works
+## Recommended Webhook Payload
 
-1. Agent clicks a "Copy" button on a lead row
-2. Name, Email, and Phone are copied to clipboard as formatted text
-3. The lead is flagged as `manually_imported = true` with a `manually_imported_at` timestamp in the database
-4. A clipboard/checkmark icon and "Copied" badge appear on that row going forward
-5. The stats bar and filters are updated to include a "Manually Imported" count and filter option
+Beyond the fields you requested (timestamp, name, email, phone), here are additional fields I recommend including to give your agents maximum context when reaching out via SMS:
 
-## Changes Required
+| Field | Why Include It |
+|---|---|
+| `timestamp` | When the lead came in -- urgency/speed-to-lead |
+| `name` | Who to address |
+| `email` | Alternate contact method |
+| `phone` | Primary contact for SMS |
+| `debt_amount` | Lets agents tailor the conversation to the lead's situation |
+| `debt_types` | "Credit Cards, Medical Bills" -- agents know what to discuss |
+| `employment_status` | Qualification signal (employed vs. unemployed) |
+| `behind_on_payments` | Urgency indicator -- behind leads need faster outreach |
+| `timeline_goal` | What the lead wants (e.g., "debt-free in 2 years") |
+| `sms_opt_in` | Compliance -- agents must confirm consent before texting |
+| `lead_id` | Internal reference ID for CRM cross-referencing |
+| `crm_synced` | Whether the CRM sync succeeded (agents know if CRM has the lead) |
 
-### Database Migration
-Add two columns to the `leads` table:
-- `manually_imported` (boolean, default false) -- whether contact info was copied
-- `manually_imported_at` (timestamptz, nullable) -- when it was copied
+## Implementation Steps
 
-### Backend: `supabase/functions/admin-leads/index.ts`
-Add a new action `mark-manually-imported` that sets both fields on a given lead.
+### Step 1: Store the n8n Webhook URL as a Secret
 
-### Frontend Changes
+You will need to provide your n8n webhook URL (e.g., `https://your-instance.app.n8n.cloud/webhook/abc123`). This will be stored securely as `N8N_WEBHOOK_URL` so it is never exposed in client-side code.
 
-**`src/components/admin/types.ts`**
-- Add `manually_imported` and `manually_imported_at` fields to the `Lead` interface
-- Add `"manually_imported"` to the `StatusFilter` union type
+### Step 2: Update the `sync-to-crm` Backend Function
 
-**`src/components/admin/LeadsTable.tsx`**
-- Add a "Copy" button in the Actions column that copies Name, Email, Phone to clipboard and calls the backend to mark the lead
-- Show a checkmark icon or "Copied" badge on leads already marked
+After the lead is saved to the database and the CRM sync completes, add a new step that fires a POST request to the n8n webhook:
 
-**`src/components/admin/AdminStats.tsx`**
-- Add a 4th stat card showing count of manually imported leads
+- The webhook call will be non-blocking ("fire and forget") so it does not slow down the form submission or cause failures if n8n is unreachable.
+- Errors from the webhook call will be logged but will NOT fail the lead submission.
+- The payload will use the sanitized data already prepared in the function.
 
-**`src/components/admin/AdminFilters.tsx`**
-- Add a "Manually Imported" filter button
+The webhook call will be placed after both the database insert and CRM sync, so the payload can include `crm_synced` status.
 
-**`src/pages/Admin.tsx`**
-- Add `handleMarkManuallyImported` function
-- Update stats calculation to include manually imported count
-- Update filter logic to handle the new filter value
+### Step 3: Set Up the n8n Workflow
 
-## Clipboard Format
+On the n8n side (you do this in your n8n dashboard):
 
-When copied, the text will look like:
-```
-John Smith
-john@email.com
-5551234567
-```
+1. Create a new workflow
+2. Add a **Webhook** trigger node (choose "POST" method)
+3. Copy the webhook URL it generates
+4. Provide that URL to Lovable so it can be stored as a secret
+5. Add downstream nodes (e.g., an SMS node to text agents with lead details)
+6. Activate the workflow
 
-This makes it easy to paste into any external CRM or spreadsheet.
+### What Will NOT Change
 
-## Visual Indicators
-
-- Leads NOT yet copied: show a clipboard icon button labeled "Copy Contact"
-- Leads already copied: show a green checkmark badge with "Copied" and the date/time
-- The copy button remains available to re-copy, but the visual stays green
+- The lead form UI stays the same
+- The database insert logic stays the same
+- The CRM sync logic stays the same
+- If the n8n webhook fails, leads still save and sync to CRM normally
 
 ## Technical Details
 
-| File | Change |
-|------|--------|
-| DB migration | Add `manually_imported` (bool) and `manually_imported_at` (timestamptz) columns |
-| `supabase/functions/admin-leads/index.ts` | Add `mark-manually-imported` action handler |
-| `src/components/admin/types.ts` | Extend `Lead` interface and `StatusFilter` type |
-| `src/components/admin/LeadsTable.tsx` | Add copy button, visual indicator, pass handler |
-| `src/components/admin/AdminStats.tsx` | Add 4th "Manually Imported" stat card |
-| `src/components/admin/AdminFilters.tsx` | Add "Manually Imported" filter button |
-| `src/pages/Admin.tsx` | Add handler, update stats/filter logic |
+The webhook POST request added to the backend function will look like:
+
+```text
+POST {N8N_WEBHOOK_URL}
+Content-Type: application/json
+
+{
+  "timestamp": "2026-02-11T15:30:00.000Z",
+  "lead_id": "uuid-here",
+  "name": "John Smith",
+  "email": "john@email.com",
+  "phone": "5551234567",
+  "debt_amount": 25000,
+  "debt_types": ["Credit Cards", "Medical Bills"],
+  "employment_status": "Full-Time",
+  "behind_on_payments": "Yes",
+  "timeline_goal": "Debt-free in 2 years",
+  "sms_opt_in": true,
+  "crm_synced": true
+}
+```
+
+The call will be wrapped in a try/catch so failures are logged but never block the response to the user.
+
