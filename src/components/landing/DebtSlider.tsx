@@ -21,14 +21,14 @@ const DebtSlider = ({ value, onChange }: DebtSliderProps) => {
       <Slider
         value={[value]}
         onValueChange={(vals) => onChange(vals[0])}
-        min={5000}
+        min={10000}
         max={100000}
         step={1000}
         className="py-4"
       />
       
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>$5,000</span>
+        <span>$10,000</span>
         <span>$100,000+</span>
       </div>
     </div>
