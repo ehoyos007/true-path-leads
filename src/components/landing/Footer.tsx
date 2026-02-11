@@ -79,10 +79,7 @@ const Footer = () => {
       <div className="border-t border-background/10">
         <div className="container mx-auto px-4 py-6">
           <p className="text-xs text-background/50 leading-relaxed mb-4">
-            <strong>Disclaimer:</strong> True Horizon Financial is a debt resolution company. We are not a loan provider, law firm, or credit repair organization. Our services may not be suitable for all individuals, and outcomes vary based on individual circumstances. Debt resolution programs may have an impact on your credit score and may result in tax liability on forgiven debt. Please consult with a financial advisor or tax professional for advice specific to your situation.
-          </p>
-          <p className="text-xs text-background/50 leading-relaxed mb-4">
-            Results and savings mentioned on this website are examples and may vary based on your specific debt situation, creditors, and other factors. True Horizon Financial does not guarantee any specific results.
+            <strong>Disclaimer:</strong> True Horizon Financial LLC is not a debt relief provider, lender, broker, mortgage company, law firm, or credit repair organization. We do not provide debt settlement, debt negotiation, or debt management services. Instead, we offer consultative services and may refer consumers to independent, licensed third-party financial service providers when appropriate. Any information you submit is not a credit application with True Horizon Financial LLC, but a request to be connected with a licensed professional. Our services may not be suitable for everyone, and results are not guaranteed. Outcomes, including potential savings or debt reduction, vary based on individual circumstances, creditor participation, and other factors.
           </p>
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-4 border-t border-background/10">
             <p className="text-xs text-background/50">
